@@ -16,7 +16,7 @@ class SupportConversation(models.Model):
     )
 
     def __str__(self):
-        return f"{self.customer} - Conversation {self.id}"
+        return f"Conversation {self.id} - {self.company}"
 
 
 

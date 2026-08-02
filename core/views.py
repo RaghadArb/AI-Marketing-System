@@ -1,8 +1,23 @@
 from django.shortcuts import render
 
-# Create your views here.
+from campaign.models import Campaign, CampaignContent
 
-from django.http import HttpResponse
 
 def home(request):
-    return HttpResponse("Hello Django AI Project!")
+
+    campaigns = Campaign.objects.all()
+
+    contents = CampaignContent.objects.all().order_by(
+        "-created_at"
+    )
+
+    context = {
+        "campaigns": campaigns,
+        "contents": contents,
+    }
+
+    return render(
+        request,
+        "dashboard.html",
+        context
+    )

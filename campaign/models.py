@@ -2,23 +2,19 @@ from django.db import models
 from companies.models import Company
 from products.models import Product
 
+PLATFORM_CHOICES = [
+    ('Instagram', 'Instagram'),
+    ('Facebook', 'Facebook'),
+    ('TikTok', 'TikTok'),
+    ('LinkedIn', 'LinkedIn'),
+    ('Google Ads', 'Google Ads'),
+    ('Email', 'Email'),
+    ('Other', 'Other'),
+]
 
 class Campaign(models.Model):
 
-    PLATFORM_CHOICES = [
-        ('Instagram', 'Instagram'),
-        ('Facebook', 'Facebook'),
-        ('TikTok', 'TikTok'),
-        ('LinkedIn', 'LinkedIn'),
-        ('Google Ads', 'Google Ads'),
-        ('Email', 'Email'),
-        ('Other', 'Other'),
-    ]
-    platform = models.CharField(
-        max_length=50,
-        choices=PLATFORM_CHOICES
-    )
-    
+
     STATUS_CHOICES = [
         ('Draft', 'Draft'),
         ('Active', 'Active'),
@@ -47,7 +43,7 @@ class Campaign(models.Model):
     objective = models.TextField()
 
     platform = models.CharField(
-        max_length=20,
+        max_length=50,
         choices=PLATFORM_CHOICES
     )
 
@@ -113,15 +109,7 @@ class CampaignContent(models.Model):
         choices=CONTENT_TYPE_CHOICES,
         default='Post'
     )
-    PLATFORM_CHOICES = [
-        ('Instagram', 'Instagram'),
-        ('Facebook', 'Facebook'),
-        ('TikTok', 'TikTok'),
-        ('LinkedIn', 'LinkedIn'),
-        ('Google Ads', 'Google Ads'),
-        ('Email', 'Email'),
-        ('Other', 'Other'),
-    ]
+
     platform = models.CharField(
         max_length=50,
         choices=PLATFORM_CHOICES
@@ -142,7 +130,15 @@ class CampaignContent(models.Model):
     created_at = models.DateTimeField(
         auto_now_add=True
     )
-
+    
+    language = models.CharField(
+    max_length=20,
+    choices=[
+        ("Arabic", "Arabic"),
+        ("English", "English")],
+    default="Arabic"
+    )
+    
     def __str__(self):
         return self.title
 
@@ -177,7 +173,10 @@ class CampaignPerformance(models.Model):
     comments = models.PositiveIntegerField(
         default=0
     )
-
+    language = models.CharField(
+        max_length=20,
+        default="Arabic"
+    )
     recorded_at = models.DateTimeField(
         auto_now_add=True
     )
