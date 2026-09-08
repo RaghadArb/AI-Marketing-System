@@ -2,6 +2,7 @@ venv/
 __pycache__/
 *.pyc
 db.sqlite3
+sqlite_data_backup.json
 .env
 media/
 .idea/

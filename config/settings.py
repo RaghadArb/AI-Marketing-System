@@ -87,13 +87,35 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+#
+# Switch with DB_ENGINE in .env:
+#   sqlite  = local db.sqlite3 (safe default)
+#   mysql   = MySQL using MYSQL_* variables
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+DB_ENGINE = os.getenv("DB_ENGINE", "sqlite").strip().lower()
+
+if DB_ENGINE == "mysql":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": os.getenv("MYSQL_DATABASE", "marketing_platform"),
+            "USER": os.getenv("MYSQL_USER", "root"),
+            "PASSWORD": os.getenv("MYSQL_PASSWORD", ""),
+            "HOST": os.getenv("MYSQL_HOST", "127.0.0.1"),
+            "PORT": os.getenv("MYSQL_PORT", "3306"),
+            "OPTIONS": {
+                "charset": "utf8mb4",
+                "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+            },
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
 # Password validation
