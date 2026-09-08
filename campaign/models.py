@@ -1,31 +1,33 @@
 from django.db import models
+
 from companies.models import Company
 from products.models import Product
 
+
 PLATFORM_CHOICES = [
-    ('Instagram', 'Instagram'),
-    ('Facebook', 'Facebook'),
-    ('TikTok', 'TikTok'),
-    ('LinkedIn', 'LinkedIn'),
-    ('Google Ads', 'Google Ads'),
-    ('Email', 'Email'),
-    ('Other', 'Other'),
+    ("Instagram", "Instagram"),
+    ("Facebook", "Facebook"),
+    ("TikTok", "TikTok"),
+    ("LinkedIn", "LinkedIn"),
+    ("Google Ads", "Google Ads"),
+    ("Email", "Email"),
+    ("Other", "Other"),
 ]
+
 
 class Campaign(models.Model):
 
-
     STATUS_CHOICES = [
-        ('Draft', 'Draft'),
-        ('Active', 'Active'),
-        ('Completed', 'Completed'),
-        ('Paused', 'Paused'),
+        ("Draft", "Draft"),
+        ("Active", "Active"),
+        ("Completed", "Completed"),
+        ("Paused", "Paused"),
     ]
 
     company = models.ForeignKey(
         Company,
         on_delete=models.CASCADE,
-        related_name='campaigns'
+        related_name="campaigns"
     )
 
     product = models.ForeignKey(
@@ -33,7 +35,7 @@ class Campaign(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='campaigns'
+        related_name="campaigns"
     )
 
     campaign_name = models.CharField(
@@ -67,7 +69,7 @@ class Campaign(models.Model):
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default='Draft'
+        default="Draft"
     )
 
     created_at = models.DateTimeField(
@@ -81,21 +83,22 @@ class Campaign(models.Model):
     def __str__(self):
         return self.campaign_name
 
+
 class CampaignContent(models.Model):
 
     CONTENT_TYPE_CHOICES = [
-        ('Post', 'Post'),
-        ('Caption', 'Caption'),
-        ('Ad Copy', 'Ad Copy'),
-        ('Story', 'Story'),
-        ('Email', 'Email'),
-        ('Video Script', 'Video Script'),
+        ("Post", "Post"),
+        ("Caption", "Caption"),
+        ("Ad Copy", "Ad Copy"),
+        ("Story", "Story"),
+        ("Email", "Email"),
+        ("Video Script", "Video Script"),
     ]
 
     campaign = models.ForeignKey(
         Campaign,
         on_delete=models.CASCADE,
-        related_name='contents'
+        related_name="contents"
     )
 
     title = models.CharField(
@@ -107,14 +110,29 @@ class CampaignContent(models.Model):
     content_type = models.CharField(
         max_length=30,
         choices=CONTENT_TYPE_CHOICES,
-        default='Post'
+        default="Post"
     )
 
     platform = models.CharField(
         max_length=50,
         choices=PLATFORM_CHOICES
     )
-    
+
+    language = models.CharField(
+        max_length=20,
+        choices=[
+            ("Arabic", "Arabic"),
+            ("English", "English"),
+        ],
+        default="Arabic"
+    )
+
+    poster = models.ImageField(
+        upload_to="campaign_posters/",
+        blank=True,
+        null=True
+    )
+
     ai_generated = models.BooleanField(
         default=True
     )
@@ -130,24 +148,17 @@ class CampaignContent(models.Model):
     created_at = models.DateTimeField(
         auto_now_add=True
     )
-    
-    language = models.CharField(
-    max_length=20,
-    choices=[
-        ("Arabic", "Arabic"),
-        ("English", "English")],
-    default="Arabic"
-    )
-    
+
     def __str__(self):
         return self.title
+
 
 class CampaignPerformance(models.Model):
 
     campaign = models.ForeignKey(
         Campaign,
         on_delete=models.CASCADE,
-        related_name='performance'
+        related_name="performance"
     )
 
     platform = models.CharField(
@@ -173,10 +184,12 @@ class CampaignPerformance(models.Model):
     comments = models.PositiveIntegerField(
         default=0
     )
+
     language = models.CharField(
         max_length=20,
         default="Arabic"
     )
+
     recorded_at = models.DateTimeField(
         auto_now_add=True
     )

@@ -1,14 +1,11 @@
 import requests
 
-# takes the prompt and returns a response 
 
 class OllamaClient:
 
     def __init__(self):
-
         self.url = "http://localhost:11434/api/generate"
         self.model = "llama3.2:1b"
-
 
     def generate_response(self, prompt):
 
@@ -19,13 +16,15 @@ class OllamaClient:
                 "prompt": prompt,
                 "stream": False,
                 "options": {
-                    "num_predict": 150,
-                    "temperature": 0.3
+                    "num_predict": 500,
+                    "temperature": 0.4
                 }
-            }
+            },
+            timeout=180
         )
+
         response.raise_for_status()
 
         data = response.json()
 
-        return data["response"]
+        return data["response"].strip()

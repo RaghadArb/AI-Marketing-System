@@ -1,144 +1,346 @@
-from ai_services.clients.ollama_client import OllamaClient
+from ai_services.clients.cloudflare_ai_client import CloudflareAIClient
+from ai_services.services.content_validator import ContentValidator
+from ai_services.services.knowledge_service import KnowledgeService
 
 
 class ContentGenerator:
+    """
+    Generates exactly 3 marketing suggestions using Cloudflare text AI.
 
+    Supports an optional creative_brief dict so the generated copy
+    stays aligned with the poster concept chosen by the user.
 
-    def __init__(self):
-
-        self.llm = OllamaClient()
-
-
-
-    def generate_campaign_content(self, campaign, language):
-
-        product_name = (
-            campaign.product.product_name
-            if campaign.product
-            else "Unknown product"
+    Public method used by dashboard/views.py:
+        generate_campaign_content(
+            campaign=...,
+            language="Arabic",
+            creative_brief={...},
         )
 
-
-from ai_services.clients.ollama_client import OllamaClient
-
-
-class ContentGenerator:
-
+    Return format:
+        {
+            "content": "...",
+            "validation": {...}
+        }
+    """
 
     def __init__(self):
+        self.ai_client = CloudflareAIClient()
+        self.knowledge_service = KnowledgeService()
+        self.validator = ContentValidator()
 
-        self.llm = OllamaClient()
-
-
-
-    def generate_campaign_content(self, campaign, language):
-
-        product_name = (
-            campaign.product.product_name
-            if campaign.product
-            else "Unknown product"
+    def _get_knowledge_context(self, campaign):
+        result = self.knowledge_service.get_company_context(
+            campaign.company
         )
 
+        if not result:
+            return ""
+
+        if isinstance(result, str):
+            return result.strip()
+
+        return str(result).strip()
+
+    def _validate_content(self, content, campaign):
+        validation_result = self.validator.validate(
+            content,
+            campaign,
+        )
+
+        if isinstance(validation_result, dict):
+            if "is_valid" not in validation_result:
+                if "valid" in validation_result:
+                    validation_result["is_valid"] = bool(
+                        validation_result["valid"]
+                    )
+
+                elif "passed" in validation_result:
+                    validation_result["is_valid"] = bool(
+                        validation_result["passed"]
+                    )
+
+            validation_result.setdefault(
+                "errors",
+                [],
+            )
+
+            return validation_result
+
+        if isinstance(validation_result, bool):
+            return {
+                "is_valid": validation_result,
+                "errors": (
+                    []
+                    if validation_result
+                    else [
+                        "Generated content did not pass validation."
+                    ]
+                ),
+            }
+
+        raise RuntimeError(
+            "ContentValidator returned an unsupported result."
+        )
+
+    def generate_campaign_content(
+        self,
+        campaign,
+        language="Arabic",
+        creative_brief=None,
+    ):
+        creative_brief = creative_brief or {}
+
+        company = campaign.company
+        product = campaign.product
+
+        company_name = getattr(
+            company,
+            "company_name",
+            "",
+        )
+
+        company_industry = getattr(
+            company,
+            "industry",
+            "",
+        )
+
+        company_description = (
+            getattr(
+                company,
+                "description",
+                "",
+            )
+            or ""
+        )
+
+        product_name = (
+            getattr(
+                product,
+                "product_name",
+                "",
+            )
+            if product
+            else ""
+        )
+
+        product_description = (
+            getattr(
+                product,
+                "description",
+                "",
+            )
+            if product
+            else ""
+        ) or ""
+
+        campaign_name = getattr(
+            campaign,
+            "campaign_name",
+            "",
+        )
+
+        campaign_objective = (
+            getattr(
+                campaign,
+                "objective",
+                "",
+            )
+            or ""
+        )
+
+        platform = getattr(
+            campaign,
+            "platform",
+            "",
+        )
+
+        knowledge_context = self._get_knowledge_context(
+            campaign
+        )
+
+        brief_focus = str(
+            creative_brief.get(
+                "focus",
+                "",
+            )
+        ).strip()
+
+        brief_style = str(
+            creative_brief.get(
+                "style",
+                "Premium Product Ad",
+            )
+        ).strip()
+
+        brief_colors = str(
+            creative_brief.get(
+                "colors",
+                "",
+            )
+        ).strip()
+
+        brief_background = str(
+            creative_brief.get(
+                "background",
+                "",
+            )
+        ).strip()
+
+        brief_composition = str(
+            creative_brief.get(
+                "composition",
+                "Product Centered",
+            )
+        ).strip()
+
+        brief_mood = str(
+            creative_brief.get(
+                "mood",
+                "",
+            )
+        ).strip()
+
+        brief_additional = str(
+            creative_brief.get(
+                "additional",
+                "",
+            )
+        ).strip()
+
+        system_prompt = (
+            "You are a professional marketing content strategist. "
+            "Follow the requested output structure exactly. "
+            "Never invent discounts, prices, percentages, statistics, "
+            "promo codes, certifications, partnerships, URLs, or "
+            "product features that were not supplied."
+        )
 
         prompt = f"""
-        You are a professional marketing copywriter.
+Create exactly THREE different marketing content suggestions.
 
-        Create 3 different marketing content suggestions for this campaign.
+LANGUAGE
+{language}
 
-        Product:
-        {product_name}
+COMPANY
+Name: {company_name}
+Industry: {company_industry}
+Description: {company_description or "Not provided"}
 
-        Objective:
-        {campaign.objective}
+PRODUCT
+Name: {product_name or "No specific product"}
+Description: {product_description or "Not provided"}
 
-        Platform:
-        {campaign.platform}
+CAMPAIGN
+Name: {campaign_name}
+Objective: {campaign_objective or "Not provided"}
+Platform: {platform}
 
+KNOWLEDGE BASE
+Use this only as factual grounding when relevant:
+{knowledge_context or "No additional knowledge-base context was provided."}
 
-        Target language:
-        {language}
+CREATIVE BRIEF
+The marketing specialist supplied this direction for the advertisement.
 
+Main advertising focus:
+{brief_focus or "Not specified"}
 
-        Rules:
+Visual style:
+{brief_style or "Premium Product Ad"}
 
-        If language is English:
-        - Write ONLY in English.
-        - Do not use Arabic characters.
-        - Hashtags must be English.
+Preferred color palette:
+{brief_colors or "No specific palette"}
 
-        If language is Arabic:
-        - Write ONLY in Modern Standard Arabic.
-        - Do not use English words.
-        - Hashtags must be Arabic.
+Background or scene:
+{brief_background or "Not specified"}
 
+Composition:
+{brief_composition or "Product Centered"}
 
-        Create exactly 3 suggestions.
+Desired mood:
+{brief_mood or "Not specified"}
 
-        For each suggestion use this format:
+Additional direction:
+{brief_additional or "None"}
 
+RULES
+- Produce exactly 3 suggestions.
+- Make the suggestions meaningfully different.
+- Keep all three aligned with the creative brief.
+- Adapt the copy to {platform}.
+- Write the marketing copy in {language}.
+- Keep wording natural and publishable.
+- Do not invent discounts.
+- Do not invent percentages.
+- Do not invent prices.
+- Do not invent promo codes.
+- Do not invent statistics.
+- Do not invent certifications.
+- Do not invent partnerships.
+- Do not invent URLs.
+- Do not invent unsupported product features.
+- Do not add explanations before or after the suggestions.
 
-        Suggestion 1
+RETURN EXACTLY THIS STRUCTURE:
 
-        Title:
-        ...
+Suggestion 1
 
-        Caption:
-        ...
+Title:
+...
 
-        Hashtags:
-        ...
+Caption:
+...
 
-        Short Description:
-        ...
+Hashtags:
+...
 
+Call to Action:
+...
 
-        Suggestion 2
+Suggestion 2
 
-        Title:
-        ...
+Title:
+...
 
-        Caption:
-        ...
+Caption:
+...
 
-        Hashtags:
-        ...
+Hashtags:
+...
 
-        Short Description:
-        ...
+Call to Action:
+...
 
+Suggestion 3
 
-        Suggestion 3
+Title:
+...
 
-        Title:
-        ...
+Caption:
+...
 
-        Caption:
-        ...
+Hashtags:
+...
 
-        Hashtags:
-        ...
+Call to Action:
+...
+""".strip()
 
-        Short Description:
-        ...
-
-
-        Do not add explanations.
-        Do not add introductions.
-        Return only the marketing content.
-        """
-
-
-        response = self.llm.generate_response(
-            prompt
+        generated_content = self.ai_client.generate(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            temperature=0.7,
+            max_tokens=1600,
         )
 
-
-        return response
-
-
-        response = self.llm.generate_response(
-            prompt
+        validation = self._validate_content(
+            generated_content,
+            campaign,
         )
 
-
-        return response
+        return {
+            "content": generated_content,
+            "validation": validation,
+        }

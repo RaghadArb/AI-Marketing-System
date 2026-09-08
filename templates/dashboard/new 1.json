@@ -1,0 +1,20 @@
+{
+  "clip_id": "clip_0182",
+  "current_keywords": ["رجل", "كلام", "ضحك", "فيديو"],
+  "current_emotion": ["ضحك"],
+
+  "human_interpretation": "A guy realizes something unbelievable and looks at the camera like 'are you serious?'",
+
+  "usage_contexts": [
+    "لما احد يقول شيء ما تصدقه",
+    "من صجك؟",
+    "مستحيل",
+    "لما تسمع خبر غريب"
+  ],
+
+  "human_emotions": [
+    "surprise",
+    "disbelief",
+    "sarcasm"
+  ]
+}

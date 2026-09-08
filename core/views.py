@@ -1,23 +1,15 @@
-from django.shortcuts import render
-
-from campaign.models import Campaign, CampaignContent
+from django.shortcuts import redirect
 
 
 def home(request):
+    if request.user.is_authenticated:
+        if request.user.is_superuser:
+            return redirect("/admin/")
 
-    campaigns = Campaign.objects.all()
+        if (
+            hasattr(request.user, "profile")
+            and request.user.profile.role == "MARKETING_SPECIALIST"
+        ):
+            return redirect("/dashboard/")
 
-    contents = CampaignContent.objects.all().order_by(
-        "-created_at"
-    )
-
-    context = {
-        "campaigns": campaigns,
-        "contents": contents,
-    }
-
-    return render(
-        request,
-        "dashboard.html",
-        context
-    )
+    return redirect("/login/")
