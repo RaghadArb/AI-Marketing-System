@@ -4,7 +4,6 @@
 
 <head>
 
-```
 <meta charset="UTF-8">
 
 <meta
@@ -56,15 +55,15 @@
     }
 
 </style>
-```
 
 </head>
 
-<body>
+<body{% if workspace_company %} class="has-company-workspace"{% endif %}>
+
+{% include "dashboard/_company_workspace.html" %}
 
 <div class="container py-5">
 
-```
 <div class="page-header">
 
     <div class="d-flex justify-content-between align-items-center">
@@ -76,7 +75,7 @@
             </h2>
 
             <p class="mb-0 opacity-75">
-                Manage company documents used as AI knowledge resources.
+                Knowledge documents are stored in MySQL and indexed in ChromaDB for AI retrieval.
             </p>
 
         </div>
@@ -84,14 +83,14 @@
         <div>
 
             <a
-                href="{% url 'dashboard_home' %}"
+                href="{% if workspace_company %}{% url 'company_workspace' workspace_company.id %}{% else %}{% url 'dashboard_home' %}{% endif %}"
                 class="btn btn-outline-light me-2"
             >
-                ← Dashboard
+                ← {% if workspace_company %}Overview{% else %}Dashboard{% endif %}
             </a>
 
             <a
-                href="{% url 'knowledge_document_create' %}"
+                href="{% url 'knowledge_document_create' %}{% if workspace_company %}?workspace={{ workspace_company.id }}{% endif %}"
                 class="btn btn-light"
             >
                 + Add Document
@@ -108,7 +107,7 @@
 
     {% for message in messages %}
 
-        <div class="alert alert-success alert-dismissible fade show">
+        <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show">
 
             {{ message }}
 
@@ -157,6 +156,27 @@
 
                 </div>
 
+                <div class="mb-3">
+                    <div class="small text-muted mb-1">RAG Status</div>
+                    {% if document.rag_state.state == "indexed" %}
+                        <span class="badge bg-success">● Indexed</span>
+                    {% elif document.rag_state.state == "not_indexed" %}
+                        <span class="badge bg-warning text-dark">● Not Indexed</span>
+                    {% else %}
+                        <span class="badge bg-secondary">● Indexing unavailable</span>
+                    {% endif %}
+                    <div class="small text-muted mt-2 mb-0">
+                        Stored in MySQL
+                        {% if document.rag_state.state == "indexed" %}
+                            · Indexed in ChromaDB
+                        {% elif document.rag_state.state == "not_indexed" %}
+                            · Not indexed in ChromaDB
+                        {% else %}
+                            · ChromaDB status unavailable
+                        {% endif %}
+                    </div>
+                </div>
+
                 {% if document.description %}
 
                     <p class="text-muted">
@@ -190,7 +210,7 @@
                     <div class="d-flex gap-2">
 
                         <a
-                            href="{% url 'knowledge_document_edit' document.id %}"
+                            href="{% url 'knowledge_document_edit' document.id %}{% if workspace_company %}?workspace={{ workspace_company.id }}{% endif %}"
                             class="btn btn-outline-primary flex-fill"
                         >
                             Edit
@@ -204,6 +224,7 @@
                         >
 
                             {% csrf_token %}
+                            {% include "dashboard/_workspace_field.html" %}
 
                             <button
                                 type="submit"
@@ -241,7 +262,7 @@
                 </p>
 
                 <a
-                    href="{% url 'knowledge_document_create' %}"
+                    href="{% url 'knowledge_document_create' %}{% if workspace_company %}?workspace={{ workspace_company.id }}{% endif %}"
                     class="btn btn-primary"
                 >
                     + Add Document
@@ -254,7 +275,6 @@
     {% endfor %}
 
 </div>
-```
 
 </div>
 

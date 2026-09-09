@@ -529,6 +529,71 @@
     </div>
 
 
+    <div class="analytics-card mb-4">
+
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+            <div>
+                <h4 class="mb-1">AI Recommendations</h4>
+                <p class="text-muted mb-0">
+                    Grounded in this campaign's recorded performance metrics. Generated only when requested.
+                </p>
+            </div>
+            <form method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="generate_ai_recommendations">
+                <button type="submit" class="btn btn-primary">
+                    Generate AI Recommendations
+                </button>
+            </form>
+        </div>
+
+        {% if advisor_error %}
+            <div class="alert alert-warning mb-0">
+                {{ advisor_error }}
+            </div>
+        {% elif advisor_result %}
+            <div class="mb-3">
+                <div class="metric-title">Performance Insight</div>
+                <p class="mb-0">{{ advisor_result.performance_insight }}</p>
+            </div>
+            {% if advisor_result.strengths %}
+                <div class="mb-3">
+                    <div class="metric-title">Strengths</div>
+                    <ul class="mb-0">
+                        {% for item in advisor_result.strengths %}
+                            <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+            {% if advisor_result.weaknesses %}
+                <div class="mb-3">
+                    <div class="metric-title">Weaknesses</div>
+                    <ul class="mb-0">
+                        {% for item in advisor_result.weaknesses %}
+                            <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+            {% if advisor_result.recommended_actions %}
+                <div>
+                    <div class="metric-title">Recommended Actions</div>
+                    <ul class="mb-0">
+                        {% for item in advisor_result.recommended_actions %}
+                            <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        {% else %}
+            <p class="text-muted mb-0">
+                Analytics are shown above. Use the button to generate AI recommendations when needed.
+            </p>
+        {% endif %}
+
+    </div>
+
 
     <!-- ================= FOOTER ================= -->
 

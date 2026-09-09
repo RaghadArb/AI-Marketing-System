@@ -21,18 +21,22 @@ class VectorStore:
         document_id,
         text,
         embedding,
-        company_id
+        company_id,
+        metadata=None,
     ):
+
+        item_metadata = {
+            "company_id": int(company_id)
+        }
+
+        if metadata:
+            item_metadata.update(metadata)
 
         self.collection.add(
             ids=[str(document_id)],
             documents=[text],
             embeddings=[embedding],
-            metadatas=[
-                {
-                    "company_id": company_id
-                }
-            ]
+            metadatas=[item_metadata]
         )
 
     # Retrieve relevant documents
@@ -43,15 +47,102 @@ class VectorStore:
         n_results=3
     ):
 
-        results = self.collection.query(
-            query_embeddings=[embedding],
-            n_results=n_results,
-            where={
-                "company_id": company_id
-            }
-        )
+        where_filter = {
+            "$or": [
+                {"company_id": int(company_id)},
+                {"company_id": str(company_id)},
+            ]
+        }
+
+        try:
+            results = self.collection.query(
+                query_embeddings=[embedding],
+                n_results=max(1, int(n_results)),
+                where=where_filter
+            )
+        except Exception:
+            try:
+                results = self.collection.query(
+                    query_embeddings=[embedding],
+                    n_results=max(1, int(n_results)),
+                    where={"company_id": int(company_id)}
+                )
+            except Exception:
+                results = {"documents": [[]]}
 
         return results
+
+    def company_has_chunks(self, company_id):
+        for where_filter in (
+            {"company_id": int(company_id)},
+            {"company_id": str(company_id)},
+        ):
+            try:
+                existing = self.collection.get(
+                    where=where_filter,
+                    limit=1,
+                    include=[],
+                )
+                if existing.get("ids"):
+                    return True
+            except Exception:
+                continue
+
+        return False
+
+    def document_chunk_counts(self, document_ids):
+        counts = {
+            int(document_id): 0
+            for document_id in document_ids
+        }
+
+        if not counts:
+            return counts
+
+        try:
+            existing = self.collection.get(
+                include=["metadatas"]
+            )
+        except Exception:
+            return counts
+
+        ids = existing.get("ids") or []
+        metadatas = existing.get("metadatas") or []
+
+        for index, item_id in enumerate(ids):
+            matched = None
+            if index < len(metadatas) and isinstance(metadatas[index], dict):
+                raw = metadatas[index].get("knowledge_document_id")
+                try:
+                    matched = int(raw)
+                except (TypeError, ValueError):
+                    matched = None
+
+            if matched is None:
+                text_id = str(item_id)
+                for document_id in counts:
+                    if text_id.startswith(f"{document_id}_"):
+                        matched = document_id
+                        break
+
+            if matched in counts:
+                counts[matched] += 1
+
+        return counts
+
+    def delete_document_chunks(self, knowledge_document_id):
+        prefix = f"{knowledge_document_id}_"
+        existing = self.collection.get(include=[])
+        ids = [
+            item_id
+            for item_id in (existing.get("ids") or [])
+            if str(item_id).startswith(prefix)
+        ]
+
+        if ids:
+            self.collection.delete(ids=ids)
+
+        return len(ids)
 
     # Export backup JSON files
     def export_backup_files(self):

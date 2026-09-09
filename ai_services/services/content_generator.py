@@ -210,7 +210,7 @@ class ContentGenerator:
         ).strip()
 
         system_prompt = (
-            "You are a professional marketing content strategist. "
+            "You are a professional marketing content strategist and copywriter. "
             "Follow the requested output structure exactly. "
             "Never invent discounts, prices, percentages, statistics, "
             "promo codes, certifications, partnerships, URLs, or "
@@ -220,8 +220,12 @@ class ContentGenerator:
         prompt = f"""
 Create exactly THREE different marketing content suggestions.
 
+ROLE
+Write as a professional marketing content strategist and copywriter.
+
 LANGUAGE
 {language}
+If the language is Arabic, use natural professional Arabic. Do not produce awkward literal translations.
 
 COMPANY
 Name: {company_name}
@@ -238,49 +242,27 @@ Objective: {campaign_objective or "Not provided"}
 Platform: {platform}
 
 KNOWLEDGE BASE
-Use this only as factual grounding when relevant:
+Use this only as factual grounding. Never invent facts that are not present:
 {knowledge_context or "No additional knowledge-base context was provided."}
 
 CREATIVE BRIEF
-The marketing specialist supplied this direction for the advertisement.
-
-Main advertising focus:
-{brief_focus or "Not specified"}
-
-Visual style:
-{brief_style or "Premium Product Ad"}
-
-Preferred color palette:
-{brief_colors or "No specific palette"}
-
-Background or scene:
-{brief_background or "Not specified"}
-
-Composition:
-{brief_composition or "Product Centered"}
-
-Desired mood:
-{brief_mood or "Not specified"}
-
-Additional direction:
-{brief_additional or "None"}
+Main advertising focus: {brief_focus or "Not specified"}
+Visual style: {brief_style or "Premium Product Ad"}
+Preferred color palette: {brief_colors or "No specific palette"}
+Background or scene: {brief_background or "Not specified"}
+Composition: {brief_composition or "Product Centered"}
+Desired mood: {brief_mood or "Not specified"}
+Additional direction: {brief_additional or "None"}
 
 RULES
-- Produce exactly 3 suggestions.
-- Make the suggestions meaningfully different.
+- Produce exactly 3 suggestions that are meaningfully different.
+- Match the tone and format of {platform}.
+- Write natural, publishable copy in {language}.
+- Include a clear call to action when appropriate.
+- Include relevant hashtags when appropriate.
+- Avoid generic filler and unsupported claims.
+- Never invent product or company facts that are not in the context above.
 - Keep all three aligned with the creative brief.
-- Adapt the copy to {platform}.
-- Write the marketing copy in {language}.
-- Keep wording natural and publishable.
-- Do not invent discounts.
-- Do not invent percentages.
-- Do not invent prices.
-- Do not invent promo codes.
-- Do not invent statistics.
-- Do not invent certifications.
-- Do not invent partnerships.
-- Do not invent URLs.
-- Do not invent unsupported product features.
 - Do not add explanations before or after the suggestions.
 
 RETURN EXACTLY THIS STRUCTURE:

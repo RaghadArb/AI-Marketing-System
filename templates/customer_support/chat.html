@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Support Chat · {{ company.company_name }}</title>
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
+    <style>
+        body {
+            background: #f4f7fb;
+            font-family: Arial, sans-serif;
+            min-height: 100vh;
+        }
+        .chat-shell {
+            max-width: 760px;
+        }
+        .brand-bar {
+            background: #172033;
+            color: white;
+            border-radius: 14px;
+            padding: 20px 24px;
+        }
+        .company-logo {
+            width: 56px;
+            height: 56px;
+            object-fit: cover;
+            border-radius: 10px;
+            background: #273754;
+        }
+        .chat-card {
+            background: white;
+            border-radius: 14px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+            min-height: 520px;
+            display: flex;
+            flex-direction: column;
+        }
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 480px;
+            padding: 20px;
+        }
+        .bubble {
+            max-width: 80%;
+            padding: 12px 14px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            white-space: pre-wrap;
+        }
+        .bubble-customer {
+            background: #0d6efd;
+            color: #fff;
+            margin-left: auto;
+        }
+        .bubble-customer .label {
+            color: rgba(255,255,255,0.85);
+        }
+        .bubble-ai {
+            background: #f1f4f8;
+        }
+        .label {
+            font-size: 11px;
+            font-weight: bold;
+            margin-bottom: 4px;
+            color: #6c757d;
+        }
+        .composer {
+            border-top: 1px solid #eef1f6;
+            padding: 16px;
+        }
+        .typing {
+            color: #6c757d;
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+<body>
+<div class="container py-4 chat-shell">
+
+    <div class="brand-bar d-flex align-items-center gap-3 mb-4">
+        {% if company.logo %}
+            <img src="{{ company.logo.url }}" alt="{{ company.company_name }} logo" class="company-logo">
+        {% else %}
+            <div class="company-logo d-flex align-items-center justify-content-center">💬</div>
+        {% endif %}
+        <div>
+            <div class="small opacity-75">Customer Support</div>
+            <h1 class="h4 mb-0">{{ company.company_name }}</h1>
+        </div>
+    </div>
+
+    <div class="chat-card">
+        <div id="messages" class="messages">
+            <div class="bubble bubble-ai">
+                <div class="label">Support</div>
+                Hello, welcome to {{ company.company_name }}. How can we help you today?
+            </div>
+        </div>
+        <form id="chat-form" class="composer">
+            {% csrf_token %}
+            <label class="form-label visually-hidden" for="message">Message</label>
+            <div class="input-group">
+                <input
+                    id="message"
+                    name="message"
+                    type="text"
+                    class="form-control"
+                    maxlength="2000"
+                    placeholder="Type your question..."
+                    required
+                    autocomplete="off"
+                >
+                <button class="btn btn-primary" type="submit" id="send-btn">
+                    Send
+                </button>
+            </div>
+            <div id="chat-error" class="text-danger small mt-2 d-none"></div>
+        </form>
+    </div>
+</div>
+
+<script>
+    const form = document.getElementById("chat-form");
+    const input = document.getElementById("message");
+    const messages = document.getElementById("messages");
+    const sendBtn = document.getElementById("send-btn");
+    const errorBox = document.getElementById("chat-error");
+    const csrfToken = document.querySelector("[name=csrfmiddlewaretoken]").value;
+    const messageUrl = "{% url 'customer_send_message' company.id %}";
+    let conversationId = null;
+    let sending = false;
+    let typingEl = null;
+
+    function addBubble(role, text) {
+        const wrap = document.createElement("div");
+        wrap.className = "bubble " + (role === "Customer" ? "bubble-customer" : "bubble-ai");
+        wrap.innerHTML = '<div class="label"></div>';
+        wrap.querySelector(".label").textContent = role === "Customer" ? "You" : "Support";
+        wrap.appendChild(document.createTextNode(text));
+        messages.appendChild(wrap);
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    function setBusy(isBusy) {
+        sending = isBusy;
+        sendBtn.disabled = isBusy;
+        input.disabled = isBusy;
+        sendBtn.textContent = isBusy ? "Sending..." : "Send";
+        if (isBusy) {
+            typingEl = document.createElement("div");
+            typingEl.className = "typing";
+            typingEl.textContent = "Support is typing...";
+            messages.appendChild(typingEl);
+            messages.scrollTop = messages.scrollHeight;
+        } else if (typingEl) {
+            typingEl.remove();
+            typingEl = null;
+        }
+    }
+
+    form.addEventListener("submit", async function (event) {
+        event.preventDefault();
+        if (sending) return;
+        const text = input.value.trim();
+        if (!text) return;
+
+        errorBox.classList.add("d-none");
+        addBubble("Customer", text);
+        input.value = "";
+        setBusy(true);
+
+        try {
+            const payload = { message: text };
+            if (conversationId) {
+                payload.conversation_id = conversationId;
+            }
+            const response = await fetch(messageUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrfToken
+                },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || "Could not send the message.");
+            }
+            conversationId = data.conversation_id;
+            addBubble("AI", data.response || "");
+        } catch (err) {
+            errorBox.textContent = err.message;
+            errorBox.classList.remove("d-none");
+        } finally {
+            setBusy(false);
+            input.focus();
+        }
+    });
+</script>
+</body>
+</html>

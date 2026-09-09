@@ -1,0 +1,27 @@
+{% load campaign_ui %}
+{% with percent=campaign|campaign_progress %}
+<div class="mb-3">
+    <div class="d-flex justify-content-between small text-muted mb-1">
+        <span>Campaign Progress</span>
+        <span>
+            {% if percent is None %}N/A{% else %}{{ percent }}%{% endif %}
+        </span>
+    </div>
+    {% if percent is None %}
+        <div class="progress" style="height: 8px;" aria-label="Campaign progress unavailable">
+            <div class="progress-bar bg-secondary" style="width: 0%;"></div>
+        </div>
+    {% else %}
+        <div class="progress" style="height: 8px;" aria-label="Campaign progress {{ percent }} percent">
+            <div
+                class="progress-bar bg-primary"
+                role="progressbar"
+                style="width: {{ percent }}%;"
+                aria-valuenow="{{ percent }}"
+                aria-valuemin="0"
+                aria-valuemax="100"
+            ></div>
+        </div>
+    {% endif %}
+</div>
+{% endwith %}

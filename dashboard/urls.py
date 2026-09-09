@@ -7,6 +7,7 @@ from .views import (
     company_create,
     company_edit,
     company_delete,
+    company_workspace,
 
     campaigns_dashboard,
     campaign_analytics_dashboard,
@@ -65,6 +66,48 @@ urlpatterns = [
         "companies/<int:company_id>/delete/",
         company_delete,
         name="company_delete"
+    ),
+
+    path(
+        "workspace/<int:company_id>/",
+        company_workspace,
+        name="company_workspace"
+    ),
+
+    path(
+        "workspace/<int:company_id>/products/",
+        products_dashboard,
+        name="company_products_dashboard"
+    ),
+
+    path(
+        "workspace/<int:company_id>/campaigns/",
+        campaigns_dashboard,
+        name="company_campaigns_dashboard"
+    ),
+
+    path(
+        "workspace/<int:company_id>/ai-content/",
+        ai_content_dashboard,
+        name="company_ai_content_dashboard"
+    ),
+
+    path(
+        "workspace/<int:company_id>/support/",
+        customer_support_dashboard,
+        name="company_support_dashboard"
+    ),
+
+    path(
+        "workspace/<int:company_id>/knowledge/",
+        knowledge_base_dashboard,
+        name="company_knowledge_dashboard"
+    ),
+
+    path(
+        "workspace/<int:company_id>/reports/",
+        reports_dashboard,
+        name="company_reports_dashboard"
     ),
 
 

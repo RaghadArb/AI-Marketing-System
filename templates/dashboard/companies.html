@@ -246,8 +246,16 @@
                     <hr>
 
 
-                    <div class="d-flex gap-2">
+                    <div class="d-flex flex-column gap-2">
 
+                        <a
+                            href="{% url 'company_workspace' company.id %}"
+                            class="btn btn-primary w-100"
+                        >
+                            Open company dashboard
+                        </a>
+
+                        <div class="d-flex gap-2">
 
                         <a
                             href="{% url 'company_edit' company.id %}"
@@ -274,6 +282,8 @@
                             </button>
 
                         </form>
+
+                        </div>
 
 
                     </div>

@@ -16,6 +16,9 @@ from companies.forms import CompanyForm
 from campaign.forms import CampaignForm
 
 from ai_services.analytics.service import AnalyticsService
+from ai_services.rag.ingestion import DocumentIngestionService
+from ai_services.rag.vector_store import VectorStore
+from ai_services.services.campaign_advisor import CampaignAdvisor
 from ai_services.services.content_generator import ContentGenerator
 from ai_services.services.instagram_publisher import (
     InstagramConfigError,
@@ -25,14 +28,131 @@ from ai_services.services.instagram_publisher import (
 from ai_services.services.poster_generator import PosterGenerator
 
 from .decorators import marketing_specialist_required
+from .presentation import parse_suggestion_display
+from .workspace import (
+    limit_campaign_form_to_company,
+    limit_form_to_company,
+    redirect_company_scope,
+    workspace_context,
+    workspace_id_from_request,
+)
 
 from products.models import Product
 from products.forms import ProductForm
 
-from customer_support.models import SupportConversation
+from customer_support.models import SupportConversation, SupportMessage
 
 from knowledge.models import KnowledgeDocument
 from knowledge.forms import KnowledgeDocumentForm
+
+
+INSTAGRAM_LIVE_CONNECTION_MESSAGE = (
+    "Instagram publishing is available but requires a connected "
+    "Meta Developer account. Live account connection is not "
+    "configured in this environment."
+)
+
+
+def _instagram_is_configured():
+    return InstagramPublisher().client.is_configured()
+
+
+def _safe_instagram_publish_error(message):
+    text = str(message or "").strip()
+
+    if not text:
+        return ""
+
+    lowered = text.lower()
+    technical_markers = (
+        "meta_access_token",
+        "instagram_business_account_id",
+        "instagram_public_media_base_url",
+        "access_token",
+        "graph api",
+        "graph.facebook",
+        "token",
+        "localhost",
+    )
+
+    if any(marker in lowered for marker in technical_markers):
+        return INSTAGRAM_LIVE_CONNECTION_MESSAGE
+
+    return text
+
+
+def _suggestion_payload(item):
+    display = parse_suggestion_display(item.content_text)
+    poster_url = None
+
+    if item.poster:
+        try:
+            poster_url = item.poster.url
+        except ValueError:
+            poster_url = None
+
+    return {
+        "id": item.id,
+        "title": item.title,
+        "content": item.content_text,
+        "display": display,
+        "poster_url": poster_url,
+        "platform": item.platform,
+        "is_selected": item.is_selected,
+        "is_published": item.is_published,
+        "instagram_permalink": item.instagram_permalink,
+        "publish_error": _safe_instagram_publish_error(
+            item.publish_error
+        ),
+    }
+
+
+def _document_rag_states(documents):
+    document_list = list(documents)
+    counts = {}
+
+    try:
+        counts = VectorStore().document_chunk_counts(
+            [document.id for document in document_list]
+        )
+    except Exception:
+        return {
+            document.id: {
+                "state": "unavailable",
+                "label": "Indexing unavailable",
+                "chunks": 0,
+            }
+            for document in document_list
+        }
+
+    states = {}
+
+    for document in document_list:
+        chunk_count = counts.get(document.id, 0)
+        if chunk_count > 0:
+            states[document.id] = {
+                "state": "indexed",
+                "label": "Indexed",
+                "chunks": chunk_count,
+            }
+        else:
+            states[document.id] = {
+                "state": "not_indexed",
+                "label": "Not Indexed",
+                "chunks": 0,
+            }
+
+    return states
+
+
+def _ingest_knowledge_document(document):
+    try:
+        chunk_count = DocumentIngestionService().process_document(
+            document
+        )
+        return chunk_count, None
+    except Exception as exc:
+        return None, str(exc)
 
 # ==========================================================
 # DASHBOARD HOME
@@ -57,15 +177,45 @@ def dashboard_home(request):
     ).count()
 
     campaigns_count = owned_campaigns.count()
+    active_campaigns_count = owned_campaigns.filter(
+        status="Active"
+    ).count()
 
     ai_contents_count = CampaignContent.objects.filter(
         campaign__company__owner=request.user,
         ai_generated=True
     ).count()
 
+    conversations_count = SupportConversation.objects.filter(
+        company__owner=request.user
+    ).count()
+
     recent_campaigns = owned_campaigns.order_by(
         "-created_at"
     )[:5]
+
+    recent_ai_content = (
+        CampaignContent.objects.filter(
+            campaign__company__owner=request.user,
+            ai_generated=True,
+            poster__isnull=False,
+        )
+        .exclude(poster="")
+        .select_related("campaign", "campaign__company")
+        .order_by("-created_at")[:6]
+    )
+
+    recent_support_messages = (
+        SupportMessage.objects.filter(
+            conversation__company__owner=request.user
+        )
+        .select_related("conversation", "conversation__company")
+        .order_by("-created_at")[:5]
+    )
+
+    companies = Company.objects.filter(
+        owner=request.user
+    ).order_by("company_name")
 
     return render(
         request,
@@ -74,8 +224,13 @@ def dashboard_home(request):
             "companies_count": companies_count,
             "products_count": products_count,
             "campaigns_count": campaigns_count,
+            "active_campaigns_count": active_campaigns_count,
             "ai_contents_count": ai_contents_count,
+            "conversations_count": conversations_count,
             "recent_campaigns": recent_campaigns,
+            "recent_ai_content": recent_ai_content,
+            "recent_support_messages": recent_support_messages,
+            "companies": companies,
         }
     )
 
@@ -97,6 +252,39 @@ def companies_dashboard(request):
         {
             "companies": companies,
         }
+    )
+
+
+@marketing_specialist_required
+def company_workspace(request, company_id):
+    context = workspace_context(
+        request,
+        company_id,
+        tab="overview",
+    )
+    company = context["workspace_company"]
+
+    context.update(
+        {
+            "products_count": Product.objects.filter(
+                company=company
+            ).count(),
+            "campaigns_count": Campaign.objects.filter(
+                company=company
+            ).count(),
+            "documents_count": KnowledgeDocument.objects.filter(
+                company=company
+            ).count(),
+            "conversations_count": SupportConversation.objects.filter(
+                company=company
+            ).count(),
+        }
+    )
+
+    return render(
+        request,
+        "dashboard/company_workspace.html",
+        context,
     )
 
 
@@ -173,8 +361,10 @@ def company_edit(
                 "Company updated successfully."
             )
 
-            return redirect(
-                "companies_dashboard"
+            return redirect_company_scope(
+                request,
+                "companies_dashboard",
+                "company_workspace",
             )
 
     else:
@@ -183,15 +373,24 @@ def company_edit(
             instance=company
         )
 
-    return render(
+    context = workspace_context(
         request,
-        "dashboard/company_form.html",
+        workspace_id_from_request(request),
+        tab="overview",
+    )
+    context.update(
         {
             "form": form,
             "company": company,
             "page_title": "Edit Company",
             "button_text": "Save Changes",
         }
+    )
+
+    return render(
+        request,
+        "dashboard/company_form.html",
+        context,
     )
 
 
@@ -229,7 +428,7 @@ def company_delete(
 # ==========================================================
 
 @marketing_specialist_required
-def products_dashboard(request):
+def products_dashboard(request, company_id=None):
 
     products = Product.objects.filter(
         company__owner=request.user
@@ -239,17 +438,35 @@ def products_dashboard(request):
         "-created_at"
     )
 
+    context = workspace_context(
+        request,
+        company_id,
+        tab="products" if company_id else None,
+    )
+    workspace_company = context["workspace_company"]
+
+    if workspace_company:
+        products = products.filter(company=workspace_company)
+
+    context["products"] = products
+
     return render(
         request,
         "dashboard/products.html",
-        {
-            "products": products,
-        }
+        context,
     )
 
 
 @marketing_specialist_required
 def product_create(request):
+
+    workspace_id = workspace_id_from_request(request)
+    workspace = workspace_context(
+        request,
+        workspace_id,
+        tab="products" if workspace_id else None,
+    )
+    workspace_company = workspace["workspace_company"]
 
     if request.method == "POST":
 
@@ -258,6 +475,9 @@ def product_create(request):
             request.FILES,
             user=request.user
         )
+
+        if workspace_company:
+            limit_form_to_company(form, workspace_company)
 
         if form.is_valid():
 
@@ -268,8 +488,10 @@ def product_create(request):
                 "Product added successfully."
             )
 
-            return redirect(
-                "products_dashboard"
+            return redirect_company_scope(
+                request,
+                "products_dashboard",
+                "company_products_dashboard",
             )
 
     else:
@@ -278,14 +500,21 @@ def product_create(request):
             user=request.user
         )
 
-    return render(
-        request,
-        "dashboard/product_form.html",
+        if workspace_company:
+            limit_form_to_company(form, workspace_company)
+
+    workspace.update(
         {
             "form": form,
             "page_title": "Add Product",
             "button_text": "Add Product",
         }
+    )
+
+    return render(
+        request,
+        "dashboard/product_form.html",
+        workspace,
     )
 
 
@@ -301,6 +530,14 @@ def product_edit(
         company__owner=request.user
     )
 
+    workspace_id = workspace_id_from_request(request)
+    workspace = workspace_context(
+        request,
+        workspace_id,
+        tab="products" if workspace_id else None,
+    )
+    workspace_company = workspace["workspace_company"]
+
     if request.method == "POST":
 
         form = ProductForm(
@@ -309,6 +546,9 @@ def product_edit(
             instance=product,
             user=request.user
         )
+
+        if workspace_company:
+            limit_form_to_company(form, workspace_company)
 
         if form.is_valid():
 
@@ -319,8 +559,10 @@ def product_edit(
                 "Product updated successfully."
             )
 
-            return redirect(
-                "products_dashboard"
+            return redirect_company_scope(
+                request,
+                "products_dashboard",
+                "company_products_dashboard",
             )
 
     else:
@@ -330,15 +572,22 @@ def product_edit(
             user=request.user
         )
 
-    return render(
-        request,
-        "dashboard/product_form.html",
+        if workspace_company:
+            limit_form_to_company(form, workspace_company)
+
+    workspace.update(
         {
             "form": form,
             "product": product,
             "page_title": "Edit Product",
             "button_text": "Save Changes",
         }
+    )
+
+    return render(
+        request,
+        "dashboard/product_form.html",
+        workspace,
     )
 
 
@@ -367,8 +616,10 @@ def product_delete(
             f"{product_name} deleted successfully."
         )
 
-    return redirect(
-        "products_dashboard"
+    return redirect_company_scope(
+        request,
+        "products_dashboard",
+        "company_products_dashboard",
     )
     
 # ==========================================================
@@ -376,7 +627,7 @@ def product_delete(
 # ==========================================================
 
 @marketing_specialist_required
-def campaigns_dashboard(request):
+def campaigns_dashboard(request, company_id=None):
 
     campaigns = Campaign.objects.filter(
         company__owner=request.user
@@ -387,17 +638,35 @@ def campaigns_dashboard(request):
         "-created_at"
     )
 
+    context = workspace_context(
+        request,
+        company_id,
+        tab="campaigns" if company_id else None,
+    )
+    workspace_company = context["workspace_company"]
+
+    if workspace_company:
+        campaigns = campaigns.filter(company=workspace_company)
+
+    context["campaigns"] = campaigns
+
     return render(
         request,
         "dashboard/campaigns.html",
-        {
-            "campaigns": campaigns
-        }
+        context,
     )
 
 
 @marketing_specialist_required
 def campaign_create(request):
+
+    workspace_id = workspace_id_from_request(request)
+    workspace = workspace_context(
+        request,
+        workspace_id,
+        tab="campaigns" if workspace_id else None,
+    )
+    workspace_company = workspace["workspace_company"]
 
     if request.method == "POST":
 
@@ -405,6 +674,9 @@ def campaign_create(request):
             request.POST,
             user=request.user
         )
+
+        if workspace_company:
+            limit_campaign_form_to_company(form, workspace_company)
 
         if form.is_valid():
 
@@ -444,8 +716,10 @@ def campaign_create(request):
                         "Campaign created successfully."
                     )
 
-                    return redirect(
-                        "campaigns_dashboard"
+                    return redirect_company_scope(
+                        request,
+                        "campaigns_dashboard",
+                        "company_campaigns_dashboard",
                     )
 
     else:
@@ -454,14 +728,21 @@ def campaign_create(request):
             user=request.user
         )
 
-    return render(
-        request,
-        "dashboard/campaign_form.html",
+        if workspace_company:
+            limit_campaign_form_to_company(form, workspace_company)
+
+    workspace.update(
         {
             "form": form,
             "page_title": "Add Campaign",
             "button_text": "Add Campaign",
         }
+    )
+
+    return render(
+        request,
+        "dashboard/campaign_form.html",
+        workspace,
     )
 
 
@@ -477,6 +758,14 @@ def campaign_edit(
         company__owner=request.user
     )
 
+    workspace_id = workspace_id_from_request(request)
+    workspace = workspace_context(
+        request,
+        workspace_id,
+        tab="campaigns" if workspace_id else None,
+    )
+    workspace_company = workspace["workspace_company"]
+
     if request.method == "POST":
 
         form = CampaignForm(
@@ -484,6 +773,9 @@ def campaign_edit(
             instance=campaign,
             user=request.user
         )
+
+        if workspace_company:
+            limit_campaign_form_to_company(form, workspace_company)
 
         if form.is_valid():
 
@@ -512,8 +804,10 @@ def campaign_edit(
                     "Campaign updated successfully."
                 )
 
-                return redirect(
-                    "campaigns_dashboard"
+                return redirect_company_scope(
+                    request,
+                    "campaigns_dashboard",
+                    "company_campaigns_dashboard",
                 )
 
     else:
@@ -523,15 +817,22 @@ def campaign_edit(
             user=request.user
         )
 
-    return render(
-        request,
-        "dashboard/campaign_form.html",
+        if workspace_company:
+            limit_campaign_form_to_company(form, workspace_company)
+
+    workspace.update(
         {
             "form": form,
             "campaign": campaign,
             "page_title": "Edit Campaign",
             "button_text": "Save Changes",
         }
+    )
+
+    return render(
+        request,
+        "dashboard/campaign_form.html",
+        workspace,
     )
 
 
@@ -560,8 +861,10 @@ def campaign_delete(
             f"{campaign_name} deleted successfully."
         )
 
-    return redirect(
-        "campaigns_dashboard"
+    return redirect_company_scope(
+        request,
+        "campaigns_dashboard",
+        "company_campaigns_dashboard",
     )
 
 
@@ -604,12 +907,32 @@ def campaign_analytics_dashboard(
         chart_files
     )
 
+    advisor_result = None
+    advisor_error = None
+
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "generate_ai_recommendations"
+    ):
+        try:
+            advisor_result = CampaignAdvisor().generate(
+                campaign,
+                result.get("summary") or {},
+            )
+        except Exception:
+            advisor_error = (
+                "AI recommendations could not be generated. "
+                "Campaign analytics are still available."
+            )
+
     return render(
         request,
         "dashboard/campaign_analytics.html",
         {
             "campaign": campaign,
             "analytics": result,
+            "advisor_result": advisor_result,
+            "advisor_error": advisor_error,
         }
     )
 
@@ -655,7 +978,7 @@ def analytics_chart(
 # ==========================================================
 
 @marketing_specialist_required
-def ai_content_dashboard(request):
+def ai_content_dashboard(request, company_id=None):
 
     campaigns = (
         Campaign.objects
@@ -663,6 +986,16 @@ def ai_content_dashboard(request):
         .select_related("company", "product")
         .order_by("-created_at")
     )
+
+    workspace = workspace_context(
+        request,
+        company_id,
+        tab="ai_content" if company_id else None,
+    )
+    workspace_company = workspace["workspace_company"]
+
+    if workspace_company:
+        campaigns = campaigns.filter(company=workspace_company)
 
     generated_suggestions = []
     selected_campaign = None
@@ -852,22 +1185,7 @@ def ai_content_dashboard(request):
                                 )
 
                             generated_suggestions = [
-                                {
-                                    "id": item.id,
-                                    "title": item.title,
-                                    "content": item.content_text,
-                                    "poster_url": (
-                                        item.poster.url
-                                        if item.poster
-                                        else None
-                                    ),
-                                    "is_selected": item.is_selected,
-                                    "is_published": item.is_published,
-                                    "instagram_permalink": (
-                                        item.instagram_permalink
-                                    ),
-                                    "publish_error": item.publish_error,
-                                }
+                                _suggestion_payload(item)
                                 for item in created_contents
                             ]
 
@@ -994,6 +1312,12 @@ def ai_content_dashboard(request):
                     "to Instagram."
                 )
 
+            elif not _instagram_is_configured():
+                messages.info(
+                    request,
+                    INSTAGRAM_LIVE_CONNECTION_MESSAGE
+                )
+
             else:
                 try:
                     InstagramPublisher().publish(
@@ -1006,13 +1330,16 @@ def ai_content_dashboard(request):
                         "to Instagram."
                     )
 
-                except (
-                    InstagramConfigError,
-                    InstagramPublishError
-                ) as publish_error:
+                except InstagramConfigError:
+                    messages.info(
+                        request,
+                        INSTAGRAM_LIVE_CONNECTION_MESSAGE
+                    )
+
+                except InstagramPublishError as publish_error:
                     messages.error(
                         request,
-                        str(publish_error)
+                        _safe_instagram_publish_error(publish_error)
                     )
 
                 except Exception:
@@ -1043,22 +1370,7 @@ def ai_content_dashboard(request):
             latest_contents.reverse()
 
             generated_suggestions = [
-                {
-                    "id": item.id,
-                    "title": item.title,
-                    "content": item.content_text,
-                    "poster_url": (
-                        item.poster.url
-                        if item.poster
-                        else None
-                    ),
-                    "is_selected": item.is_selected,
-                    "is_published": item.is_published,
-                    "instagram_permalink": (
-                        item.instagram_permalink
-                    ),
-                    "publish_error": item.publish_error,
-                }
+                _suggestion_payload(item)
                 for item in latest_contents
             ]
 
@@ -1071,6 +1383,8 @@ def ai_content_dashboard(request):
             "selected_campaign": selected_campaign,
             "creative_brief": creative_brief,
             "error": error,
+            "instagram_configured": _instagram_is_configured(),
+            **workspace,
         }
     )
     
@@ -1080,7 +1394,7 @@ def ai_content_dashboard(request):
 # ==========================================================
     
 @marketing_specialist_required
-def customer_support_dashboard(request):
+def customer_support_dashboard(request, company_id=None):
 
     companies = Company.objects.filter(
         owner=request.user
@@ -1091,13 +1405,19 @@ def customer_support_dashboard(request):
     support_analytics = None
     error = None
 
-    company_id = request.GET.get("company")
+    selected_id = company_id or request.GET.get("company")
 
-    if company_id:
+    workspace = workspace_context(
+        request,
+        company_id,
+        tab="support" if company_id else None,
+    )
+
+    if selected_id:
 
         selected_company = get_object_or_404(
             Company,
-            id=company_id,
+            id=selected_id,
             owner=request.user
         )
 
@@ -1122,6 +1442,22 @@ def customer_support_dashboard(request):
 
             error = str(e)
 
+    knowledge_count = 0
+    conversation_count = 0
+    rag_indexed = False
+
+    if selected_company:
+        knowledge_count = KnowledgeDocument.objects.filter(
+            company=selected_company
+        ).count()
+        conversation_count = len(conversations)
+        try:
+            rag_indexed = VectorStore().company_has_chunks(
+                selected_company.id
+            )
+        except Exception:
+            rag_indexed = False
+
     return render(
         request,
         "dashboard/customer_support.html",
@@ -1131,6 +1467,10 @@ def customer_support_dashboard(request):
             "conversations": conversations,
             "support_analytics": support_analytics,
             "error": error,
+            "knowledge_count": knowledge_count,
+            "conversation_count": conversation_count,
+            "rag_indexed": rag_indexed,
+            **workspace,
         }
     )
     
@@ -1140,7 +1480,7 @@ def customer_support_dashboard(request):
 # ==========================================================
     
 @marketing_specialist_required
-def reports_dashboard(request):
+def reports_dashboard(request, company_id=None):
 
     campaigns = Campaign.objects.filter(
         company__owner=request.user
@@ -1150,6 +1490,16 @@ def reports_dashboard(request):
     ).order_by(
         "-created_at"
     )
+
+    workspace = workspace_context(
+        request,
+        company_id,
+        tab="reports" if company_id else None,
+    )
+    workspace_company = workspace["workspace_company"]
+
+    if workspace_company:
+        campaigns = campaigns.filter(company=workspace_company)
 
     selected_campaign = None
     report_data = None
@@ -1164,6 +1514,12 @@ def reports_dashboard(request):
             id=campaign_id,
             company__owner=request.user
         )
+
+        if (
+            workspace_company
+            and selected_campaign.company_id != workspace_company.id
+        ):
+            raise Http404()
 
         try:
 
@@ -1190,6 +1546,7 @@ def reports_dashboard(request):
             "selected_campaign": selected_campaign,
             "report_data": report_data,
             "error": error,
+            **workspace,
         }
     )
     # ==========================================================
@@ -1197,7 +1554,7 @@ def reports_dashboard(request):
 # ==========================================================
 
 @marketing_specialist_required
-def knowledge_base_dashboard(request):
+def knowledge_base_dashboard(request, company_id=None):
 
     documents = KnowledgeDocument.objects.filter(
         company__owner=request.user
@@ -1207,17 +1564,45 @@ def knowledge_base_dashboard(request):
         "-uploaded_at"
     )
 
+    context = workspace_context(
+        request,
+        company_id,
+        tab="knowledge" if company_id else None,
+    )
+    workspace_company = context["workspace_company"]
+
+    if workspace_company:
+        documents = documents.filter(company=workspace_company)
+
+    documents = list(documents)
+    rag_states = _document_rag_states(documents)
+
+    for document in documents:
+        document.rag_state = rag_states.get(document.id, {
+            "state": "unavailable",
+            "label": "Indexing unavailable",
+            "chunks": 0,
+        })
+
+    context["documents"] = documents
+
     return render(
         request,
         "dashboard/knowledge_base.html",
-        {
-            "documents": documents
-        }
+        context,
     )
 
 
 @marketing_specialist_required
 def knowledge_document_create(request):
+
+    workspace_id = workspace_id_from_request(request)
+    workspace = workspace_context(
+        request,
+        workspace_id,
+        tab="knowledge" if workspace_id else None,
+    )
+    workspace_company = workspace["workspace_company"]
 
     if request.method == "POST":
 
@@ -1226,6 +1611,9 @@ def knowledge_document_create(request):
             request.FILES,
             user=request.user
         )
+
+        if workspace_company:
+            limit_form_to_company(form, workspace_company)
 
         if form.is_valid():
 
@@ -1244,13 +1632,30 @@ def knowledge_document_create(request):
 
                 document.save()
 
-                messages.success(
-                    request,
-                    "Knowledge document uploaded successfully."
+                chunk_count, ingest_error = (
+                    _ingest_knowledge_document(document)
                 )
 
-                return redirect(
-                    "knowledge_base_dashboard"
+                if ingest_error:
+                    messages.warning(
+                        request,
+                        "Document saved, but AI indexing failed."
+                    )
+                elif not chunk_count:
+                    messages.warning(
+                        request,
+                        "Document saved, but AI indexing failed."
+                    )
+                else:
+                    messages.success(
+                        request,
+                        "Document successfully indexed for AI retrieval."
+                    )
+
+                return redirect_company_scope(
+                    request,
+                    "knowledge_base_dashboard",
+                    "company_knowledge_dashboard",
                 )
 
     else:
@@ -1259,14 +1664,21 @@ def knowledge_document_create(request):
             user=request.user
         )
 
-    return render(
-        request,
-        "dashboard/knowledge_form.html",
+        if workspace_company:
+            limit_form_to_company(form, workspace_company)
+
+    workspace.update(
         {
             "form": form,
             "page_title": "Add Knowledge Document",
             "button_text": "Upload Document",
         }
+    )
+
+    return render(
+        request,
+        "dashboard/knowledge_form.html",
+        workspace,
     )
 
 
@@ -1282,6 +1694,14 @@ def knowledge_document_edit(
         company__owner=request.user
     )
 
+    workspace_id = workspace_id_from_request(request)
+    workspace = workspace_context(
+        request,
+        workspace_id,
+        tab="knowledge" if workspace_id else None,
+    )
+    workspace_company = workspace["workspace_company"]
+
     if request.method == "POST":
 
         form = KnowledgeDocumentForm(
@@ -1290,6 +1710,9 @@ def knowledge_document_edit(
             instance=document,
             user=request.user
         )
+
+        if workspace_company:
+            limit_form_to_company(form, workspace_company)
 
         if form.is_valid():
 
@@ -1308,13 +1731,30 @@ def knowledge_document_edit(
 
                 updated_document.save()
 
-                messages.success(
-                    request,
-                    "Knowledge document updated successfully."
+                chunk_count, ingest_error = (
+                    _ingest_knowledge_document(updated_document)
                 )
 
-                return redirect(
-                    "knowledge_base_dashboard"
+                if ingest_error:
+                    messages.warning(
+                        request,
+                        "Document saved, but AI indexing failed."
+                    )
+                elif not chunk_count:
+                    messages.warning(
+                        request,
+                        "Document saved, but AI indexing failed."
+                    )
+                else:
+                    messages.success(
+                        request,
+                        "Document successfully indexed for AI retrieval."
+                    )
+
+                return redirect_company_scope(
+                    request,
+                    "knowledge_base_dashboard",
+                    "company_knowledge_dashboard",
                 )
 
     else:
@@ -1324,15 +1764,22 @@ def knowledge_document_edit(
             user=request.user
         )
 
-    return render(
-        request,
-        "dashboard/knowledge_form.html",
+        if workspace_company:
+            limit_form_to_company(form, workspace_company)
+
+    workspace.update(
         {
             "form": form,
             "document": document,
             "page_title": "Edit Knowledge Document",
             "button_text": "Save Changes",
         }
+    )
+
+    return render(
+        request,
+        "dashboard/knowledge_form.html",
+        workspace,
     )
 
 
@@ -1359,6 +1806,8 @@ def knowledge_document_delete(
             f"{title} deleted successfully."
         )
 
-    return redirect(
-        "knowledge_base_dashboard"
+    return redirect_company_scope(
+        request,
+        "knowledge_base_dashboard",
+        "company_knowledge_dashboard",
     )

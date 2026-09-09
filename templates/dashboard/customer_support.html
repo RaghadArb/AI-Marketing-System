@@ -4,7 +4,6 @@
 
 <head>
 
-```
 <meta charset="UTF-8">
 
 <meta
@@ -112,15 +111,15 @@
     }
 
 </style>
-```
 
 </head>
 
-<body>
+<body{% if workspace_company %} class="has-company-workspace"{% endif %}>
+
+{% include "dashboard/_company_workspace.html" %}
 
 <div class="container py-5">
 
-```
 <div class="page-header">
 
     <div class="d-flex justify-content-between align-items-center">
@@ -128,20 +127,20 @@
         <div>
 
             <h2>
-                💬 Customer Support Analytics
+                💬 Customer Support Agent
             </h2>
 
             <p class="mb-0 opacity-75">
-                Review customer conversations and AI-generated support insights.
+                Open the customer-facing support chat, then review conversations and analytics.
             </p>
 
         </div>
 
         <a
-            href="{% url 'dashboard_home' %}"
+            href="{% if workspace_company %}{% url 'company_workspace' workspace_company.id %}{% else %}{% url 'dashboard_home' %}{% endif %}"
             class="btn btn-outline-light"
         >
-            ← Dashboard
+            ← {% if workspace_company %}Overview{% else %}Dashboard{% endif %}
         </a>
 
     </div>
@@ -149,6 +148,7 @@
 </div>
 
 
+{% if not workspace_company %}
 <div class="card-box">
 
     <h5 class="mb-3">
@@ -208,6 +208,7 @@
     </form>
 
 </div>
+{% endif %}
 
 
 {% if error %}
@@ -227,23 +228,69 @@
 
     <div class="card-box">
 
-        <h4 class="mb-1">
-            {{ selected_company.company_name }}
-        </h4>
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
 
-        <p class="text-muted mb-0">
-            Customer Support Overview
-        </p>
+            <div>
+                <h4 class="mb-1">
+                    {{ selected_company.company_name }}
+                </h4>
+
+                <p class="text-muted mb-0">
+                    This is the public customer-facing AI support chat for this company.
+                </p>
+            </div>
+
+            <a
+                href="{% url 'customer_support_chat' selected_company.id %}"
+                class="btn btn-primary btn-lg"
+                target="_blank"
+                rel="noopener noreferrer"
+            >
+                Open Customer Chat
+            </a>
+
+        </div>
+
+        <div class="row g-3 mt-4">
+            <div class="col-6 col-lg-3">
+                <div class="analytics-box">
+                    <div class="analytics-label">Agent Status</div>
+                    <div class="analytics-value">Ready</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="analytics-box">
+                    <div class="analytics-label">RAG</div>
+                    <div class="analytics-value">ChromaDB</div>
+                    <div class="small text-muted">
+                        {% if rag_indexed %}Indexed knowledge found{% else %}Waiting for indexed documents{% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="analytics-box">
+                    <div class="analytics-label">AI Provider</div>
+                    <div class="analytics-value">Cloudflare</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="analytics-box">
+                    <div class="analytics-label">Knowledge documents</div>
+                    <div class="analytics-value">{{ knowledge_count }}</div>
+                    <div class="small text-muted">{{ conversation_count }} conversations</div>
+                </div>
+            </div>
+        </div>
 
     </div>
 
 
     {% if support_analytics %}
 
-        <div class="card-box">
+        <div class="card-box" id="support-analytics">
 
             <h4 class="mb-4">
-                📊 Support Analytics
+                📈 Support Analytics
             </h4>
 
 
@@ -478,7 +525,6 @@
     </div>
 
 {% endif %}
-```
 
 </div>
 

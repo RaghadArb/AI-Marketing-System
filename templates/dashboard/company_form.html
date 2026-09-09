@@ -44,8 +44,9 @@
 </head>
 
 
-<body>
+<body{% if workspace_company %} class="has-company-workspace"{% endif %}>
 
+{% include "dashboard/_company_workspace.html" %}
 
 <div class="container py-5">
 
@@ -85,6 +86,7 @@
 
 
                     {% csrf_token %}
+                    {% include "dashboard/_workspace_field.html" %}
 
 
                     <!-- FORM ERRORS -->

@@ -91,8 +91,19 @@
         }
 
         .suggestion-card.selected {
+            border-color: #198754;
             border-left-color: #198754;
-            background: #fbfffc;
+            background: #f4fff8;
+            box-shadow: 0 0 0 1px rgba(25, 135, 84, 0.2);
+        }
+
+        .studio-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 4px;
         }
 
         .suggestion-number {
@@ -117,7 +128,7 @@
         .poster-frame img {
             display: block;
             width: 100%;
-            height: auto;
+            height: 280px;
             object-fit: cover;
         }
 
@@ -163,7 +174,9 @@
     </style>
 </head>
 
-<body>
+<body{% if workspace_company %} class="has-company-workspace"{% endif %}>
+
+{% include "dashboard/_company_workspace.html" %}
 
 <div class="container py-5">
 
@@ -206,14 +219,34 @@
             </div>
 
             <a
-                href="{% url 'dashboard_home' %}"
+                href="{% if workspace_company %}{% url 'company_workspace' workspace_company.id %}{% else %}{% url 'dashboard_home' %}{% endif %}"
                 class="btn btn-light"
             >
-                ← Dashboard
+                ← {% if workspace_company %}Overview{% else %}Dashboard{% endif %}
             </a>
 
         </div>
 
+    </div>
+
+    <div class="alert alert-light border mb-4">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+            <div>
+                Instagram publishing integration is implemented.
+                A Meta Developer account connection is required for live publishing.
+                {% if not instagram_configured %}
+                    <div class="text-muted small mt-2 mb-0">
+                        Instagram publishing is available but requires a connected Meta Developer account.
+                        Live account connection is not configured in this environment.
+                    </div>
+                {% endif %}
+            </div>
+            {% if not instagram_configured %}
+                <button type="button" class="btn btn-primary" disabled>
+                    Publish to Instagram
+                </button>
+            {% endif %}
+        </div>
     </div>
 
     <div class="row g-4">
@@ -231,13 +264,12 @@
                 </div>
 
                 <h4>
-                    Generate Marketing Content
+                    Creative Brief
                 </h4>
 
                 <p class="text-muted mb-4">
-                    Select a marketing campaign. The AI will use its campaign,
-                    platform, product and knowledge-base information to generate
-                    three validated suggestions.
+                    Configure the campaign, platform direction and visual brief.
+                    Generated posts appear in the content studio on the right.
                 </p>
 
                 <form method="POST">
@@ -538,7 +570,7 @@
                         <div>
 
                             <h4 class="mb-1">
-                                Generated Suggestions
+                                Content Studio
                             </h4>
 
                             <p class="text-muted mb-0">
@@ -571,14 +603,14 @@
 
                                 <div class="d-flex gap-2">
 
-                                    <span class="badge bg-secondary">
-                                        Saved
+                                    <span class="badge bg-info text-dark">
+                                        {{ suggestion.platform|default:selected_campaign.platform }}
                                     </span>
 
                                     {% if suggestion.is_selected %}
 
                                         <span class="badge bg-success">
-                                            Selected
+                                            ✓ Selected Content
                                         </span>
 
                                     {% endif %}
@@ -622,10 +654,31 @@
                                 {{ suggestion.title }}
                             </h5>
 
-                            <div
-                                class="suggestion-content"
-                                dir="auto"
-                            >{{ suggestion.content }}</div>
+                            {% if suggestion.display.parsed %}
+                                {% if suggestion.display.caption %}
+                                    <div class="mb-3">
+                                        <div class="studio-label">Caption</div>
+                                        <div dir="auto">{{ suggestion.display.caption }}</div>
+                                    </div>
+                                {% endif %}
+                                {% if suggestion.display.cta %}
+                                    <div class="mb-3">
+                                        <div class="studio-label">CTA</div>
+                                        <div dir="auto">{{ suggestion.display.cta }}</div>
+                                    </div>
+                                {% endif %}
+                                {% if suggestion.display.hashtags %}
+                                    <div class="mb-3">
+                                        <div class="studio-label">Hashtags</div>
+                                        <div dir="ltr">{{ suggestion.display.hashtags }}</div>
+                                    </div>
+                                {% endif %}
+                            {% else %}
+                                <div
+                                    class="suggestion-content"
+                                    dir="auto"
+                                >{{ suggestion.content }}</div>
+                            {% endif %}
 
                             {% if suggestion.publish_error and not suggestion.is_published %}
 
@@ -644,7 +697,7 @@
                                         class="btn btn-success"
                                         disabled
                                     >
-                                        ✓ Selected
+                                        ✓ Selected Content
                                     </button>
 
                                     {% if suggestion.is_published %}
@@ -663,6 +716,8 @@
                                         {% endif %}
 
                                     {% else %}
+
+                                        {% if instagram_configured %}
 
                                         <form
                                             method="POST"
@@ -691,6 +746,23 @@
                                             </button>
 
                                         </form>
+
+                                        {% else %}
+
+                                        <div>
+                                            <button
+                                                type="button"
+                                                class="btn btn-primary"
+                                                disabled
+                                            >
+                                                Publish to Instagram
+                                            </button>
+                                            <div class="form-text mt-2">
+                                                Instagram publishing is available but requires a connected Meta Developer account. Live account connection is not configured in this environment.
+                                            </div>
+                                        </div>
+
+                                        {% endif %}
 
                                     {% endif %}
 

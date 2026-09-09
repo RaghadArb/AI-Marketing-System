@@ -2,6 +2,8 @@
 
 <html lang="en">
 
+{% load campaign_ui %}
+
 <head>
 
     <meta charset="UTF-8">
@@ -35,14 +37,24 @@
             top: 0;
             padding: 25px 15px;
             z-index: 1000;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            min-height: 0;
             overflow-y: auto;
             overflow-x: hidden;
+            padding-bottom: 8px;
         }
 
         .brand {
             font-size: 22px;
             font-weight: bold;
             padding: 10px 15px 30px;
+            flex-shrink: 0;
         }
 
         .brand span {
@@ -65,10 +77,10 @@
         }
 
         .logout {
-            position: absolute;
-            bottom: 25px;
-            left: 15px;
-            right: 15px;
+            position: relative;
+            flex-shrink: 0;
+            padding-top: 15px;
+            background: #172033;
         }
 
         .main {
@@ -211,14 +223,16 @@
                 width: 100%;
                 height: auto;
                 min-height: auto;
+                overflow: visible;
+            }
+
+            .sidebar-nav {
+                overflow: visible;
             }
 
             .logout {
                 position: relative;
-                left: auto;
-                right: auto;
-                bottom: auto;
-                margin-top: 30px;
+                margin-top: 20px;
                 padding-bottom: 15px;
             }
 
@@ -240,7 +254,7 @@
         AI <span>Marketing</span>
     </div>
 
-    <nav>
+    <nav class="sidebar-nav">
 
         <a
             href="{% url 'dashboard_home' %}"
@@ -288,7 +302,14 @@
             href="{% url 'customer_support_dashboard' %}"
             class="nav-link"
         >
-            💬 Customer Support
+            💬 Customer Support Agent
+        </a>
+
+        <a
+            href="{% url 'customer_support_dashboard' %}#support-analytics"
+            class="nav-link"
+        >
+            📈 Support Analytics
         </a>
 
         <a
@@ -327,11 +348,11 @@
         <div>
 
             <h4 class="mb-1">
-                Marketing Dashboard
+                Marketing Overview
             </h4>
 
             <span class="user-role">
-                AI-powered marketing management platform
+                Monitor campaigns, AI content, customer engagement and performance.
             </span>
 
         </div>
@@ -357,12 +378,29 @@
         </h2>
 
         <p class="text-muted mb-0">
-            Manage companies, products, campaigns, AI content,
-            analytics, customer support, reports and knowledge resources
-            from one place.
+            Monitor campaigns, AI content, customer engagement and performance
+            from one executive view.
         </p>
 
     </div>
+
+    {% if companies %}
+    <h5 class="section-title">
+        Company dashboards
+    </h5>
+    <div class="row g-3 mb-5">
+        {% for company in companies %}
+        <div class="col-md-6 col-xl-4">
+            <a href="{% url 'company_workspace' company.id %}" class="quick-action">
+                <div class="fw-bold mb-1">{{ company.company_name }}</div>
+                <div class="text-muted small">
+                    {{ company.industry|default:"Open this company's products, campaigns, support and knowledge" }}
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 
     <h5 class="section-title">
         Platform Overview
@@ -399,19 +437,19 @@
             <div class="stat-card">
 
                 <div class="stat-icon purple">
-                    📦
+                    📢
                 </div>
 
                 <div class="stat-value">
-                    {{ products_count }}
+                    {{ active_campaigns_count }}
                 </div>
 
                 <h6 class="mb-1">
-                    Products
+                    Active Campaigns
                 </h6>
 
                 <p class="text-muted mb-0">
-                    Products across your companies
+                    Currently running campaigns
                 </p>
 
             </div>
@@ -423,30 +461,6 @@
             <div class="stat-card">
 
                 <div class="stat-icon green">
-                    📢
-                </div>
-
-                <div class="stat-value">
-                    {{ campaigns_count }}
-                </div>
-
-                <h6 class="mb-1">
-                    Campaigns
-                </h6>
-
-                <p class="text-muted mb-0">
-                    Marketing campaigns
-                </p>
-
-            </div>
-
-        </div>
-
-        <div class="col-6 col-lg-3">
-
-            <div class="stat-card">
-
-                <div class="stat-icon orange">
                     🤖
                 </div>
 
@@ -460,6 +474,30 @@
 
                 <p class="text-muted mb-0">
                     AI-generated campaign contents
+                </p>
+
+            </div>
+
+        </div>
+
+        <div class="col-6 col-lg-3">
+
+            <div class="stat-card">
+
+                <div class="stat-icon orange">
+                    💬
+                </div>
+
+                <div class="stat-value">
+                    {{ conversations_count }}
+                </div>
+
+                <h6 class="mb-1">
+                    Customer Conversations
+                </h6>
+
+                <p class="text-muted mb-0">
+                    Support chats for your companies
                 </p>
 
             </div>
@@ -518,8 +556,8 @@
 
         <div class="col-6 col-md-4 col-xl-2">
             <a href="{% url 'customer_support_dashboard' %}" class="quick-action text-center">
-                <div class="fw-bold mb-1">Support Analytics</div>
-                <div class="text-muted small">Review support conversations</div>
+                <div class="fw-bold mb-1">Customer Support Agent</div>
+                <div class="text-muted small">Open support analytics and chat</div>
             </a>
         </div>
 
@@ -554,6 +592,7 @@
                             <th>Company</th>
                             <th>Platform</th>
                             <th>Status</th>
+                            <th>Progress</th>
                             <th class="text-end">Action</th>
                         </tr>
                     </thead>
@@ -587,9 +626,13 @@
                                     {% elif campaign.status == "Paused" %}
                                         <span class="badge bg-warning text-dark">Paused</span>
                                     {% else %}
-                                        <span class="badge bg-secondary">{{ campaign.status }}</span>
+                                        <span class="badge {{ campaign.status|status_badge_class }}">{{ campaign.status }}</span>
                                     {% endif %}
 
+                                </td>
+
+                                <td style="min-width: 140px;">
+                                    {% include "dashboard/_campaign_progress.html" %}
                                 </td>
 
                                 <td class="text-end">
@@ -622,8 +665,98 @@
     </div>
 
     <h5 class="section-title">
+        Recent AI Content
+    </h5>
+
+    <div class="row g-3 mb-5">
+        {% for item in recent_ai_content %}
+            <div class="col-6 col-md-4 col-xl-2">
+                <div class="stat-card p-2 h-100">
+                    <img
+                        src="{{ item.poster.url }}"
+                        alt="AI poster for {{ item.title }}"
+                        class="w-100 rounded mb-2"
+                        style="height: 120px; object-fit: cover;"
+                    >
+                    <div class="small fw-semibold">{{ item.title|truncatechars:42 }}</div>
+                    <div class="text-muted small">{{ item.campaign.campaign_name }}</div>
+                </div>
+            </div>
+        {% empty %}
+            <div class="col-12">
+                <div class="stat-card text-muted">
+                    No generated posters yet. Open AI Content to create campaign creatives.
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    <h5 class="section-title">
+        Customer Support Activity
+    </h5>
+
+    <div class="panel-card mb-5">
+        {% if recent_support_messages %}
+            <ul class="list-group list-group-flush">
+                {% for message in recent_support_messages %}
+                    <li class="list-group-item d-flex justify-content-between gap-3">
+                        <div>
+                            <div class="small text-muted">
+                                {{ message.conversation.company.company_name }} · {{ message.sender }}
+                            </div>
+                            <div>{{ message.message_text|truncatechars:90 }}</div>
+                        </div>
+                        <a
+                            href="{% url 'customer_support_dashboard' %}?company={{ message.conversation.company_id }}#support-analytics"
+                            class="btn btn-sm btn-outline-primary align-self-center"
+                        >
+                            View
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <div class="p-4 text-center text-muted">
+                No customer support conversations yet.
+            </div>
+        {% endif %}
+    </div>
+
+    <h5 class="section-title">
         Marketing Operations
     </h5>
+
+    <div class="row g-4 mb-4">
+
+        <div class="col-12">
+
+            <div class="feature-card">
+
+                <span class="badge bg-success status-badge">
+                    Available
+                </span>
+
+                <h5>
+                    💬 Customer Support Agent
+                </h5>
+
+                <p>
+                    Open the customer-facing AI support chat for your companies,
+                    then review those conversations in Support Analytics.
+                </p>
+
+                <a
+                    href="{% url 'customer_support_dashboard' %}"
+                    class="btn btn-primary"
+                >
+                    Customer Support Agent
+                </a>
+
+            </div>
+
+        </div>
+
+    </div>
 
     <div class="row g-4">
 
@@ -804,7 +937,7 @@
                 </span>
 
                 <h5>
-                    💬 Support Analytics
+                    💬 Customer Support Agent
                 </h5>
 
                 <p>
@@ -816,7 +949,7 @@
                     href="{% url 'customer_support_dashboard' %}"
                     class="btn btn-primary"
                 >
-                    Open Support Analytics
+                    Customer Support Agent
                 </a>
 
             </div>

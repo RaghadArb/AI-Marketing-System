@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+{% load campaign_ui %}
 
 <head>
 
@@ -58,7 +59,9 @@
 
 </head>
 
-<body>
+<body{% if workspace_company %} class="has-company-workspace"{% endif %}>
+
+{% include "dashboard/_company_workspace.html" %}
 
 <div class="container py-5">
 
@@ -81,14 +84,14 @@
             <div>
 
                 <a
-                    href="{% url 'dashboard_home' %}"
+                    href="{% if workspace_company %}{% url 'company_workspace' workspace_company.id %}{% else %}{% url 'dashboard_home' %}{% endif %}"
                     class="btn btn-outline-light me-2"
                 >
-                    ← Dashboard
+                    ← {% if workspace_company %}Overview{% else %}Dashboard{% endif %}
                 </a>
 
                 <a
-                    href="{% url 'campaign_create' %}"
+                    href="{% url 'campaign_create' %}{% if workspace_company %}?workspace={{ workspace_company.id }}{% endif %}"
                     class="btn btn-light"
                 >
                     + Add Campaign
@@ -272,6 +275,7 @@
 
                     {% endif %}
 
+                    {% include "dashboard/_campaign_progress.html" %}
 
                     <hr>
 
@@ -290,7 +294,7 @@
                         <div class="d-flex gap-2">
 
                             <a
-                                href="{% url 'campaign_edit' campaign.id %}"
+                                href="{% url 'campaign_edit' campaign.id %}{% if workspace_company %}?workspace={{ workspace_company.id }}{% endif %}"
                                 class="btn btn-outline-primary flex-fill"
                             >
                                 Edit
@@ -305,6 +309,7 @@
                             >
 
                                 {% csrf_token %}
+                                {% include "dashboard/_workspace_field.html" %}
 
                                 <button
                                     type="submit"
