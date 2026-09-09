@@ -1,6 +1,9 @@
+import os
 import re
+from io import BytesIO
 
 from django.core.files.base import ContentFile
+from PIL import Image
 
 from ai_services.clients.cloudflare_image_client import (
     CloudflareImageClient,
@@ -94,11 +97,144 @@ class PosterGenerator:
             or "choose another prompt" in message
         )
 
+    @staticmethod
+    def _is_reference_image_error(
+        exc
+    ):
+        message = str(exc).lower()
+
+        return (
+            "input_image" in message
+            or "reference image" in message
+            or "image input" in message
+            or (
+                "unsupported" in message
+                and "image" in message
+            )
+            or (
+                "512" in message
+                and "image" in message
+            )
+            or "invalid image" in message
+            or "could not process the image" in message
+        )
+
+    @staticmethod
+    def _load_product_reference_image(
+        campaign_content
+    ):
+        product = getattr(
+            campaign_content.campaign,
+            "product",
+            None,
+        )
+
+        image_field = getattr(
+            product,
+            "product_image",
+            None,
+        ) if product else None
+
+        if not image_field or not getattr(image_field, "name", None):
+            return None
+
+        try:
+            image_field.open("rb")
+            image_bytes = image_field.read()
+        except Exception:
+            return None
+        finally:
+            try:
+                image_field.close()
+            except Exception:
+                pass
+
+        if not image_bytes:
+            return None
+
+        try:
+            image = Image.open(
+                BytesIO(image_bytes)
+            )
+            image = image.convert("RGB")
+            # FLUX.2 Klein requires reference images smaller than 512x512.
+            image.thumbnail(
+                (511, 511)
+            )
+            buffer = BytesIO()
+            image.save(
+                buffer,
+                format="PNG"
+            )
+            prepared_bytes = buffer.getvalue()
+            filename = "input_image_0.png"
+        except Exception:
+            prepared_bytes = image_bytes
+            original_name = os.path.basename(
+                getattr(image_field, "name", "") or ""
+            )
+            filename = (
+                original_name
+                if original_name.lower().endswith(
+                    (".png", ".jpg", ".jpeg", ".webp")
+                )
+                else "input_image_0.png"
+            )
+
+        return {
+            "bytes": prepared_bytes,
+            "filename": filename,
+            "content_type": "image/png",
+        }
+
+    def _generate_image(
+        self,
+        prompt,
+        reference_image=None,
+    ):
+        kwargs = {
+            "prompt": prompt,
+            "width": 1024,
+            "height": 1024,
+        }
+
+        if reference_image:
+            kwargs["reference_image"] = (
+                reference_image["bytes"]
+            )
+            kwargs["reference_filename"] = (
+                reference_image["filename"]
+            )
+            kwargs["reference_content_type"] = (
+                reference_image["content_type"]
+            )
+
+        try:
+            return self.image_client.generate_image(
+                **kwargs
+            )
+
+        except RuntimeError as exc:
+            if (
+                reference_image
+                and self._is_reference_image_error(
+                    exc
+                )
+            ):
+                return self.image_client.generate_image(
+                    prompt=prompt,
+                    width=1024,
+                    height=1024,
+                )
+
+            raise
+
     def _build_primary_prompt(
         self,
         campaign_content,
         creative_brief,
         fields,
+        has_product_reference=False,
     ):
         campaign = campaign_content.campaign
         company = campaign.company
@@ -203,6 +339,17 @@ class PosterGenerator:
             )
         )
 
+        product_reference_instructions = ""
+
+        if has_product_reference:
+            product_reference_instructions = """
+PRODUCT REFERENCE IMAGE
+A product photo is provided as input_image_0.
+Preserve the visual identity and recognizable appearance of the referenced product.
+Use this exact product as the hero subject of the advertisement.
+Do not invent a different product, substitute a similar item, or change the product's distinctive look.
+"""
+
         return f"""
 Create one finished, professional square social-media advertisement.
 
@@ -215,7 +362,7 @@ Industry: {industry}
 PRODUCT
 Product name: {product_name or "Commercial product"}
 Product description: {product_description or "Not provided"}
-
+{product_reference_instructions}
 CAMPAIGN
 Campaign: {campaign.campaign_name}
 Objective: {campaign.objective}
@@ -281,6 +428,7 @@ DESIGN REQUIREMENTS
         self,
         campaign_content,
         creative_brief,
+        has_product_reference=False,
     ):
         campaign = campaign_content.campaign
         product = campaign.product
@@ -353,6 +501,8 @@ Background:
 Composition:
 {composition}
 
+{"Use the provided product photo as input_image_0. Preserve the visual identity of that product and do not invent a different product." if has_product_reference else ""}
+
 Make the product the clear central hero.
 Use professional studio-style product photography,
 premium lighting, realistic shadows, elegant spacing,
@@ -380,22 +530,29 @@ No watermarks.
             campaign_content.content_text
         )
 
+        reference_image = (
+            self._load_product_reference_image(
+                campaign_content
+            )
+        )
+
+        has_product_reference = bool(
+            reference_image
+        )
+
         primary_prompt = (
             self._build_primary_prompt(
                 campaign_content,
                 creative_brief,
                 fields,
+                has_product_reference=has_product_reference,
             )
         )
 
         try:
-            image_bytes = (
-                self.image_client
-                .generate_image(
-                    prompt=primary_prompt,
-                    width=1024,
-                    height=1024,
-                )
+            image_bytes = self._generate_image(
+                primary_prompt,
+                reference_image=reference_image,
             )
 
         except RuntimeError as exc:
@@ -409,16 +566,13 @@ No watermarks.
                 self._build_safe_retry_prompt(
                     campaign_content,
                     creative_brief,
+                    has_product_reference=has_product_reference,
                 )
             )
 
-            image_bytes = (
-                self.image_client
-                .generate_image(
-                    prompt=safe_prompt,
-                    width=1024,
-                    height=1024,
-                )
+            image_bytes = self._generate_image(
+                safe_prompt,
+                reference_image=reference_image,
             )
 
         campaign = (

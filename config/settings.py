@@ -155,3 +155,28 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+META_ACCESS_TOKEN = os.getenv(
+    "META_ACCESS_TOKEN",
+    ""
+).strip()
+
+INSTAGRAM_BUSINESS_ACCOUNT_ID = os.getenv(
+    "INSTAGRAM_BUSINESS_ACCOUNT_ID",
+    ""
+).strip()
+
+FACEBOOK_PAGE_ID = os.getenv(
+    "FACEBOOK_PAGE_ID",
+    ""
+).strip()
+
+META_GRAPH_API_VERSION = (
+    os.getenv("META_GRAPH_API_VERSION", "v21.0")
+    or "v21.0"
+).strip()
+
+INSTAGRAM_PUBLIC_MEDIA_BASE_URL = os.getenv(
+    "INSTAGRAM_PUBLIC_MEDIA_BASE_URL",
+    ""
+).strip()

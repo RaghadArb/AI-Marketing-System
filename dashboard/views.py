@@ -17,6 +17,11 @@ from campaign.forms import CampaignForm
 
 from ai_services.analytics.service import AnalyticsService
 from ai_services.services.content_generator import ContentGenerator
+from ai_services.services.instagram_publisher import (
+    InstagramConfigError,
+    InstagramPublishError,
+    InstagramPublisher,
+)
 from ai_services.services.poster_generator import PosterGenerator
 
 from .decorators import marketing_specialist_required
@@ -36,9 +41,42 @@ from knowledge.forms import KnowledgeDocumentForm
 @marketing_specialist_required
 def dashboard_home(request):
 
+    owned_campaigns = Campaign.objects.filter(
+        company__owner=request.user
+    ).select_related(
+        "company",
+        "product"
+    )
+
+    companies_count = Company.objects.filter(
+        owner=request.user
+    ).count()
+
+    products_count = Product.objects.filter(
+        company__owner=request.user
+    ).count()
+
+    campaigns_count = owned_campaigns.count()
+
+    ai_contents_count = CampaignContent.objects.filter(
+        campaign__company__owner=request.user,
+        ai_generated=True
+    ).count()
+
+    recent_campaigns = owned_campaigns.order_by(
+        "-created_at"
+    )[:5]
+
     return render(
         request,
-        "dashboard/home.html"
+        "dashboard/home.html",
+        {
+            "companies_count": companies_count,
+            "products_count": products_count,
+            "campaigns_count": campaigns_count,
+            "ai_contents_count": ai_contents_count,
+            "recent_campaigns": recent_campaigns,
+        }
     )
 
 
@@ -825,6 +863,10 @@ def ai_content_dashboard(request):
                                     ),
                                     "is_selected": item.is_selected,
                                     "is_published": item.is_published,
+                                    "instagram_permalink": (
+                                        item.instagram_permalink
+                                    ),
+                                    "publish_error": item.publish_error,
                                 }
                                 for item in created_contents
                             ]
@@ -924,11 +966,68 @@ def ai_content_dashboard(request):
                 "Suggestion selected successfully."
             )
 
+        elif action == "publish_instagram":
+
+            content_id = request.POST.get(
+                "content_id"
+            )
+
+            campaign_content = get_object_or_404(
+                CampaignContent,
+                id=content_id,
+                campaign__company__owner=request.user
+            )
+
+            selected_campaign = campaign_content.campaign
+
+            if not campaign_content.is_selected:
+                messages.error(
+                    request,
+                    "Select this suggestion before publishing "
+                    "to Instagram."
+                )
+
+            elif campaign_content.is_published:
+                messages.error(
+                    request,
+                    "This suggestion has already been published "
+                    "to Instagram."
+                )
+
+            else:
+                try:
+                    InstagramPublisher().publish(
+                        campaign_content
+                    )
+                    campaign_content.refresh_from_db()
+                    messages.success(
+                        request,
+                        "The selected content was published "
+                        "to Instagram."
+                    )
+
+                except (
+                    InstagramConfigError,
+                    InstagramPublishError
+                ) as publish_error:
+                    messages.error(
+                        request,
+                        str(publish_error)
+                    )
+
+                except Exception:
+                    messages.error(
+                        request,
+                        "Instagram publishing failed. "
+                        "The suggestion was not marked as published."
+                    )
+
         if (
             selected_campaign
             and action in [
                 "edit",
-                "select"
+                "select",
+                "publish_instagram",
             ]
         ):
             latest_contents = list(
@@ -955,6 +1054,10 @@ def ai_content_dashboard(request):
                     ),
                     "is_selected": item.is_selected,
                     "is_published": item.is_published,
+                    "instagram_permalink": (
+                        item.instagram_permalink
+                    ),
+                    "publish_error": item.publish_error,
                 }
                 for item in latest_contents
             ]

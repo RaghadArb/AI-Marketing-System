@@ -627,6 +627,14 @@
                                 dir="auto"
                             >{{ suggestion.content }}</div>
 
+                            {% if suggestion.publish_error and not suggestion.is_published %}
+
+                                <div class="alert alert-warning mt-3 mb-0 py-2">
+                                    {{ suggestion.publish_error }}
+                                </div>
+
+                            {% endif %}
+
                             <div class="d-flex flex-wrap gap-2 mt-4">
 
                                 {% if suggestion.is_selected %}
@@ -638,6 +646,53 @@
                                     >
                                         ✓ Selected
                                     </button>
+
+                                    {% if suggestion.is_published %}
+
+                                        {% if suggestion.instagram_permalink %}
+
+                                            <a
+                                                href="{{ suggestion.instagram_permalink }}"
+                                                class="btn btn-outline-primary"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
+                                                View on Instagram
+                                            </a>
+
+                                        {% endif %}
+
+                                    {% else %}
+
+                                        <form
+                                            method="POST"
+                                            onsubmit="return confirm('Publish this selected poster and caption to Instagram now?');"
+                                        >
+
+                                            {% csrf_token %}
+
+                                            <input
+                                                type="hidden"
+                                                name="action"
+                                                value="publish_instagram"
+                                            >
+
+                                            <input
+                                                type="hidden"
+                                                name="content_id"
+                                                value="{{ suggestion.id }}"
+                                            >
+
+                                            <button
+                                                type="submit"
+                                                class="btn btn-primary"
+                                            >
+                                                Publish to Instagram
+                                            </button>
+
+                                        </form>
+
+                                    {% endif %}
 
                                 {% else %}
 

@@ -145,6 +145,28 @@ class CampaignContent(models.Model):
         default=False
     )
 
+    instagram_media_id = models.CharField(
+        max_length=100,
+        blank=True,
+        default=""
+    )
+
+    instagram_permalink = models.CharField(
+        max_length=500,
+        blank=True,
+        default=""
+    )
+
+    published_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+
+    publish_error = models.TextField(
+        blank=True,
+        default=""
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True
     )

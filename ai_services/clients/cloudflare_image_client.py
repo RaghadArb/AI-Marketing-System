@@ -51,6 +51,9 @@ class CloudflareImageClient:
         height=1024,
         guidance=None,
         seed=None,
+        reference_image=None,
+        reference_filename="input_image_0.png",
+        reference_content_type="image/png",
     ):
         if not prompt or not str(prompt).strip():
             raise ValueError("Image prompt cannot be empty.")
@@ -79,6 +82,13 @@ class CloudflareImageClient:
             multipart["seed"] = (
                 None,
                 str(int(seed)),
+            )
+
+        if reference_image:
+            multipart["input_image_0"] = (
+                reference_filename or "input_image_0.png",
+                reference_image,
+                reference_content_type or "image/png",
             )
 
         try:

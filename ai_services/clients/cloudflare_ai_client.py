@@ -3,8 +3,42 @@ import os
 import requests
 from dotenv import load_dotenv
 
+from ai_services.clients.fallback_ai_client import FallbackAIClient
+
 
 load_dotenv()
+
+
+class CloudflareQuotaError(RuntimeError):
+    """HTTP 429 or Cloudflare quota/rate-limit code 4006."""
+
+
+def _has_quota_code_4006(payload):
+    if isinstance(payload, dict):
+        code = payload.get("code")
+
+        if code == 4006 or code == "4006":
+            return True
+
+        return any(
+            _has_quota_code_4006(value)
+            for value in payload.values()
+        )
+
+    if isinstance(payload, list):
+        return any(
+            _has_quota_code_4006(value)
+            for value in payload
+        )
+
+    return False
+
+
+def _is_quota_or_rate_limit(status_code, payload):
+    if status_code == 429:
+        return True
+
+    return _has_quota_code_4006(payload)
 
 
 class CloudflareAIClient:
@@ -13,6 +47,10 @@ class CloudflareAIClient:
 
     Model:
         @cf/meta/llama-3.3-70b-instruct-fp8-fast
+
+    Cloudflare is always attempted first. A personal
+    OpenAI-compatible fallback is used only for HTTP 429
+    or Cloudflare quota code 4006.
 
     This client intentionally contains:
     - no Ollama fallback
@@ -45,7 +83,7 @@ class CloudflareAIClient:
             f"{self.account_id}/ai/run/{self.model}"
         )
 
-    def generate(
+    def _generate_with_cloudflare(
         self,
         prompt,
         system_prompt=None,
@@ -97,7 +135,16 @@ class CloudflareAIClient:
             except ValueError:
                 details = response.text
 
-            raise RuntimeError(
+            error = (
+                CloudflareQuotaError
+                if _is_quota_or_rate_limit(
+                    response.status_code,
+                    details,
+                )
+                else RuntimeError
+            )
+
+            raise error(
                 "Cloudflare text generation failed. "
                 f"HTTP {response.status_code}: {details}"
             )
@@ -110,9 +157,19 @@ class CloudflareAIClient:
             ) from exc
 
         if not payload.get("success", True):
-            raise RuntimeError(
+            errors = payload.get("errors", payload)
+            error = (
+                CloudflareQuotaError
+                if _is_quota_or_rate_limit(
+                    response.status_code,
+                    payload,
+                )
+                else RuntimeError
+            )
+
+            raise error(
                 "Cloudflare text generation failed: "
-                f"{payload.get('errors', payload)}"
+                f"{errors}"
             )
 
         result = payload.get("result", {})
@@ -142,3 +199,30 @@ class CloudflareAIClient:
             )
 
         return text
+
+    def generate(
+        self,
+        prompt,
+        system_prompt=None,
+        temperature=0.7,
+        max_tokens=1600,
+    ):
+        try:
+            return self._generate_with_cloudflare(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        except CloudflareQuotaError:
+            fallback = FallbackAIClient()
+
+            if not fallback.is_configured():
+                raise
+
+            return fallback.generate(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )

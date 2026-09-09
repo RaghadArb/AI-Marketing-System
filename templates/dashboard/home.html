@@ -4,193 +4,231 @@
 
 <head>
 
-```
-<meta charset="UTF-8">
+    <meta charset="UTF-8">
 
-<meta
-    name="viewport"
-    content="width=device-width, initial-scale=1"
->
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
 
-<title>AI Marketing Platform</title>
+    <title>AI Marketing Platform</title>
 
-<link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-    rel="stylesheet"
->
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
 
-<style>
+    <style>
 
-    body {
-        background: #f4f7fb;
-        font-family: Arial, sans-serif;
-    }
-
-    .sidebar {
-		height: 100vh;
-		background: #172033;
-		color: white;
-		position: fixed;
-		width: 250px;
-		left: 0;
-		top: 0;
-		padding: 25px 15px;
-		z-index: 1000;
-
-		overflow-y: auto;
-		overflow-x: hidden;
-	}
-
-    .brand {
-        font-size: 22px;
-        font-weight: bold;
-        padding: 10px 15px 30px;
-    }
-
-    .brand span {
-        color: #4f9cf9;
-    }
-
-    .nav-link {
-        color: #b9c3d4;
-        padding: 13px 15px;
-        border-radius: 8px;
-        margin-bottom: 5px;
-        text-decoration: none;
-        transition: 0.2s;
-    }
-
-    .nav-link:hover,
-    .nav-link.active {
-        background: #273754;
-        color: white;
-    }
-
-    .logout {
-        position: absolute;
-        bottom: 25px;
-        left: 15px;
-        right: 15px;
-    }
-
-    .main {
-        margin-left: 250px;
-        padding: 30px;
-    }
-
-    .topbar {
-        background: white;
-        border-radius: 12px;
-        padding: 18px 25px;
-        margin-bottom: 25px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
-    }
-
-    .user-role {
-        color: #6c757d;
-        font-size: 13px;
-    }
-
-    .stat-card {
-        background: white;
-        border: none;
-        border-radius: 14px;
-        padding: 22px;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
-        height: 100%;
-    }
-
-    .stat-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 22px;
-        margin-bottom: 15px;
-    }
-
-    .blue {
-        background: #e8f1ff;
-    }
-
-    .purple {
-        background: #f0eaff;
-    }
-
-    .green {
-        background: #e6f7ef;
-    }
-
-    .orange {
-        background: #fff1df;
-    }
-
-    .feature-card {
-        background: white;
-        border: none;
-        border-radius: 14px;
-        padding: 25px;
-        height: 100%;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
-        transition: 0.2s;
-        position: relative;
-    }
-
-    .feature-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 5px 18px rgba(0, 0, 0, 0.08);
-    }
-
-    .feature-card h5 {
-        font-weight: bold;
-        padding-right: 70px;
-    }
-
-    .feature-card p {
-        color: #6c757d;
-        font-size: 14px;
-        min-height: 65px;
-    }
-
-    .section-title {
-        font-weight: bold;
-        margin-bottom: 18px;
-    }
-
-    .status-badge {
-        position: absolute;
-        top: 18px;
-        right: 18px;
-        font-size: 11px;
-    }
-
-    @media (max-width: 900px) {
+        body {
+            background: #f4f7fb;
+            font-family: Arial, sans-serif;
+        }
 
         .sidebar {
-            position: relative;
-            width: 100%;
-            min-height: auto;
+            height: 100vh;
+            background: #172033;
+            color: white;
+            position: fixed;
+            width: 250px;
+            left: 0;
+            top: 0;
+            padding: 25px 15px;
+            z-index: 1000;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .brand {
+            font-size: 22px;
+            font-weight: bold;
+            padding: 10px 15px 30px;
+        }
+
+        .brand span {
+            color: #4f9cf9;
+        }
+
+        .nav-link {
+            color: #b9c3d4;
+            padding: 13px 15px;
+            border-radius: 8px;
+            margin-bottom: 5px;
+            text-decoration: none;
+            transition: 0.2s;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: #273754;
+            color: white;
         }
 
         .logout {
-		position: relative;
-		left: auto;
-		right: auto;
-		bottom: auto;
-		margin-top: 30px;
-		padding-bottom: 15px;
-		}
-
-        .main {
-            margin-left: 0;
+            position: absolute;
+            bottom: 25px;
+            left: 15px;
+            right: 15px;
         }
 
-    }
+        .main {
+            margin-left: 250px;
+            padding: 30px;
+        }
 
-</style>
-```
+        .topbar {
+            background: white;
+            border-radius: 12px;
+            padding: 18px 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+        }
+
+        .user-role {
+            color: #6c757d;
+            font-size: 13px;
+        }
+
+        .stat-card {
+            background: white;
+            border: none;
+            border-radius: 14px;
+            padding: 22px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+            height: 100%;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            margin-bottom: 15px;
+        }
+
+        .blue {
+            background: #e8f1ff;
+        }
+
+        .purple {
+            background: #f0eaff;
+        }
+
+        .green {
+            background: #e6f7ef;
+        }
+
+        .orange {
+            background: #fff1df;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .quick-action {
+            background: white;
+            border: none;
+            border-radius: 14px;
+            padding: 18px 16px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+            height: 100%;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+            transition: 0.2s;
+        }
+
+        .quick-action:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 18px rgba(0, 0, 0, 0.08);
+            color: inherit;
+        }
+
+        .feature-card {
+            background: white;
+            border: none;
+            border-radius: 14px;
+            padding: 25px;
+            height: 100%;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+            transition: 0.2s;
+            position: relative;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 18px rgba(0, 0, 0, 0.08);
+        }
+
+        .feature-card h5 {
+            font-weight: bold;
+            padding-right: 70px;
+        }
+
+        .feature-card p {
+            color: #6c757d;
+            font-size: 14px;
+            min-height: 65px;
+        }
+
+        .section-title {
+            font-weight: bold;
+            margin-bottom: 18px;
+        }
+
+        .status-badge {
+            position: absolute;
+            top: 18px;
+            right: 18px;
+            font-size: 11px;
+        }
+
+        .panel-card {
+            background: white;
+            border-radius: 14px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+        }
+
+        .platform-badge {
+            background: #e8f1ff;
+            color: #0d6efd;
+            border-radius: 20px;
+            padding: 6px 10px;
+            font-size: 12px;
+        }
+
+        @media (max-width: 900px) {
+
+            .sidebar {
+                position: relative;
+                width: 100%;
+                height: auto;
+                min-height: auto;
+            }
+
+            .logout {
+                position: relative;
+                left: auto;
+                right: auto;
+                bottom: auto;
+                margin-top: 30px;
+                padding-bottom: 15px;
+            }
+
+            .main {
+                margin-left: 0;
+            }
+
+        }
+
+    </style>
 
 </head>
 
@@ -198,524 +236,658 @@
 
 <div class="sidebar">
 
-```
-<div class="brand">
-    AI <span>Marketing</span>
-</div>
+    <div class="brand">
+        AI <span>Marketing</span>
+    </div>
 
+    <nav>
 
-<nav>
+        <a
+            href="{% url 'dashboard_home' %}"
+            class="nav-link active"
+        >
+            🏠 Dashboard
+        </a>
 
-    <a
-        href="{% url 'dashboard_home' %}"
-        class="nav-link active"
-    >
-        🏠 Dashboard
-    </a>
+        <a
+            href="{% url 'companies_dashboard' %}"
+            class="nav-link"
+        >
+            🏢 Companies
+        </a>
 
+        <a
+            href="{% url 'products_dashboard' %}"
+            class="nav-link"
+        >
+            📦 Products
+        </a>
 
-    <a
-        href="{% url 'companies_dashboard' %}"
-        class="nav-link"
-    >
-        🏢 Companies
-    </a>
+        <a
+            href="{% url 'campaigns_dashboard' %}"
+            class="nav-link"
+        >
+            📢 Campaigns
+        </a>
 
+        <a
+            href="{% url 'ai_content_dashboard' %}"
+            class="nav-link"
+        >
+            🤖 AI Content
+        </a>
 
-    <a
-        href="{% url 'products_dashboard' %}"
-        class="nav-link"
-    >
-        📦 Products
-    </a>
+        <a
+            href="{% url 'campaigns_dashboard' %}"
+            class="nav-link"
+        >
+            📊 Analytics
+        </a>
 
+        <a
+            href="{% url 'customer_support_dashboard' %}"
+            class="nav-link"
+        >
+            💬 Customer Support
+        </a>
 
-    <a
-        href="{% url 'campaigns_dashboard' %}"
-        class="nav-link"
-    >
-        📢 Campaigns
-    </a>
+        <a
+            href="{% url 'reports_dashboard' %}"
+            class="nav-link"
+        >
+            📄 Reports
+        </a>
 
+        <a
+            href="{% url 'knowledge_base_dashboard' %}"
+            class="nav-link"
+        >
+            🧠 Knowledge Base
+        </a>
 
-    <a
-        href="{% url 'ai_content_dashboard' %}"
-        class="nav-link"
-    >
-        🤖 AI Content
-    </a>
+    </nav>
 
+    <div class="logout">
 
-    <a
-        href="{% url 'campaigns_dashboard' %}"
-        class="nav-link"
-    >
-        📊 Analytics
-    </a>
+        <a
+            href="{% url 'logout' %}"
+            class="btn btn-outline-light w-100"
+        >
+            Logout
+        </a>
 
-
-    <a
-        href="{% url 'customer_support_dashboard' %}"
-        class="nav-link"
-    >
-        💬 Customer Support
-    </a>
-
-
-    <a
-        href="{% url 'reports_dashboard' %}"
-        class="nav-link"
-    >
-        📄 Reports
-    </a>
-
-
-    <a
-        href="{% url 'knowledge_base_dashboard' %}"
-        class="nav-link"
-    >
-        🧠 Knowledge Base
-    </a>
-
-</nav>
-
-
-<div class="logout">
-
-    <a
-        href="{% url 'logout' %}"
-        class="btn btn-outline-light w-100"
-    >
-        Logout
-    </a>
-
-</div>
-```
+    </div>
 
 </div>
 
 <div class="main">
 
-```
-<div class="topbar d-flex justify-content-between align-items-center">
+    <div class="topbar d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
 
-    <div>
+        <div>
 
-        <h4 class="mb-1">
-            Marketing Dashboard
-        </h4>
-
-        <span class="user-role">
-            AI-powered marketing management platform
-        </span>
-
-    </div>
-
-
-    <div class="text-end">
-
-        <strong>
-            {{ request.user.username }}
-        </strong>
-
-        <div class="user-role">
-            Marketing Specialist
-        </div>
-
-    </div>
-
-</div>
-
-
-<div class="mb-4">
-
-    <h2>
-        Welcome back, {{ request.user.username }} 👋
-    </h2>
-
-    <p class="text-muted">
-        Manage companies, products, campaigns, AI content,
-        analytics, customer support, reports and knowledge resources
-        from one place.
-    </p>
-
-</div>
-
-
-<h5 class="section-title">
-    Platform Overview
-</h5>
-
-
-<div class="row g-4 mb-5">
-
-
-    <div class="col-md-3">
-
-        <div class="stat-card">
-
-            <div class="stat-icon blue">
-                🏢
-            </div>
-
-            <h4>
-                Companies
+            <h4 class="mb-1">
+                Marketing Dashboard
             </h4>
 
-            <p class="text-muted mb-0">
-                Manage client companies
-            </p>
+            <span class="user-role">
+                AI-powered marketing management platform
+            </span>
 
         </div>
 
-    </div>
+        <div class="text-sm-end">
 
+            <strong>
+                {{ request.user.username }}
+            </strong>
 
-    <div class="col-md-3">
-
-        <div class="stat-card">
-
-            <div class="stat-icon purple">
-                📦
+            <div class="user-role">
+                Marketing Specialist
             </div>
 
-            <h4>
-                Products
-            </h4>
-
-            <p class="text-muted mb-0">
-                Manage company products
-            </p>
-
         </div>
 
     </div>
 
+    <div class="mb-4">
 
-    <div class="col-md-3">
+        <h2>
+            Welcome back, {{ request.user.username }}
+        </h2>
 
-        <div class="stat-card">
+        <p class="text-muted mb-0">
+            Manage companies, products, campaigns, AI content,
+            analytics, customer support, reports and knowledge resources
+            from one place.
+        </p>
 
-            <div class="stat-icon green">
-                📢
+    </div>
+
+    <h5 class="section-title">
+        Platform Overview
+    </h5>
+
+    <div class="row g-4 mb-5">
+
+        <div class="col-6 col-lg-3">
+
+            <div class="stat-card">
+
+                <div class="stat-icon blue">
+                    🏢
+                </div>
+
+                <div class="stat-value">
+                    {{ companies_count }}
+                </div>
+
+                <h6 class="mb-1">
+                    Companies
+                </h6>
+
+                <p class="text-muted mb-0">
+                    Your client companies
+                </p>
+
             </div>
 
-            <h4>
-                Campaigns
-            </h4>
-
-            <p class="text-muted mb-0">
-                Manage marketing campaigns
-            </p>
-
         </div>
 
-    </div>
+        <div class="col-6 col-lg-3">
 
+            <div class="stat-card">
 
-    <div class="col-md-3">
+                <div class="stat-icon purple">
+                    📦
+                </div>
 
-        <div class="stat-card">
+                <div class="stat-value">
+                    {{ products_count }}
+                </div>
 
-            <div class="stat-icon orange">
-                🤖
+                <h6 class="mb-1">
+                    Products
+                </h6>
+
+                <p class="text-muted mb-0">
+                    Products across your companies
+                </p>
+
             </div>
 
-            <h4>
-                AI Tools
-            </h4>
+        </div>
 
-            <p class="text-muted mb-0">
-                Generate and analyze using AI
-            </p>
+        <div class="col-6 col-lg-3">
+
+            <div class="stat-card">
+
+                <div class="stat-icon green">
+                    📢
+                </div>
+
+                <div class="stat-value">
+                    {{ campaigns_count }}
+                </div>
+
+                <h6 class="mb-1">
+                    Campaigns
+                </h6>
+
+                <p class="text-muted mb-0">
+                    Marketing campaigns
+                </p>
+
+            </div>
+
+        </div>
+
+        <div class="col-6 col-lg-3">
+
+            <div class="stat-card">
+
+                <div class="stat-icon orange">
+                    🤖
+                </div>
+
+                <div class="stat-value">
+                    {{ ai_contents_count }}
+                </div>
+
+                <h6 class="mb-1">
+                    AI Content
+                </h6>
+
+                <p class="text-muted mb-0">
+                    AI-generated campaign contents
+                </p>
+
+            </div>
 
         </div>
 
     </div>
 
-</div>
+    <h5 class="section-title">
+        Quick Actions
+    </h5>
 
+    <div class="row g-3 mb-5">
 
-<h5 class="section-title">
-    Marketing Operations
-</h5>
-
-
-<div class="row g-4">
-
-
-    <div class="col-md-4">
-
-        <div class="feature-card">
-
-            <span class="badge bg-success status-badge">
-                Available
-            </span>
-
-            <h5>
-                🏢 Company Management
-            </h5>
-
-            <p>
-                Add, edit and delete companies managed by
-                the Marketing Specialist.
-            </p>
-
-            <a
-                href="{% url 'companies_dashboard' %}"
-                class="btn btn-outline-primary"
-            >
-                Manage Companies
+        <div class="col-6 col-md-4 col-xl-2">
+            <a href="{% url 'company_create' %}" class="quick-action text-center">
+                <div class="fw-bold mb-1">Add Company</div>
+                <div class="text-muted small">Create a client company</div>
             </a>
-
         </div>
 
-    </div>
-
-
-    <div class="col-md-4">
-
-        <div class="feature-card">
-
-            <span class="badge bg-success status-badge">
-                Available
-            </span>
-
-            <h5>
-                📦 Product Management
-            </h5>
-
-            <p>
-                Add, edit and delete products and associate
-                them with their companies.
-            </p>
-
-            <a
-                href="{% url 'products_dashboard' %}"
-                class="btn btn-outline-primary"
-            >
-                Manage Products
+        <div class="col-6 col-md-4 col-xl-2">
+            <a href="{% url 'product_create' %}" class="quick-action text-center">
+                <div class="fw-bold mb-1">Add Product</div>
+                <div class="text-muted small">Add a company product</div>
             </a>
-
         </div>
 
-    </div>
-
-
-    <div class="col-md-4">
-
-        <div class="feature-card">
-
-            <span class="badge bg-success status-badge">
-                Available
-            </span>
-
-            <h5>
-                📢 Campaign Management
-            </h5>
-
-            <p>
-                Create, edit and delete marketing campaigns
-                and access campaign performance analytics.
-            </p>
-
-            <a
-                href="{% url 'campaigns_dashboard' %}"
-                class="btn btn-outline-primary"
-            >
-                Manage Campaigns
+        <div class="col-6 col-md-4 col-xl-2">
+            <a href="{% url 'campaign_create' %}" class="quick-action text-center">
+                <div class="fw-bold mb-1">Create Campaign</div>
+                <div class="text-muted small">Start a new campaign</div>
             </a>
-
         </div>
 
-    </div>
-
-
-    <div class="col-md-4">
-
-        <div class="feature-card">
-
-            <span class="badge bg-success status-badge">
-                Available
-            </span>
-
-            <h5>
-                🤖 AI Content Generation
-            </h5>
-
-            <p>
-                Generate marketing content using AI based on
-                campaign, platform and product information.
-            </p>
-
-            <a
-                href="{% url 'ai_content_dashboard' %}"
-                class="btn btn-primary"
-            >
-                Generate Content
+        <div class="col-6 col-md-4 col-xl-2">
+            <a href="{% url 'ai_content_dashboard' %}" class="quick-action text-center">
+                <div class="fw-bold mb-1">Generate AI Content</div>
+                <div class="text-muted small">Create copy and posters</div>
             </a>
-
         </div>
 
-    </div>
-
-
-    <div class="col-md-4">
-
-        <div class="feature-card">
-
-            <span class="badge bg-success status-badge">
-                Available
-            </span>
-
-            <h5>
-                📊 Campaign Analytics
-            </h5>
-
-            <p>
-                Analyze campaign performance and visualize
-                important marketing performance indicators.
-            </p>
-
-            <a
-                href="{% url 'campaigns_dashboard' %}"
-                class="btn btn-primary"
-            >
-                View Analytics
+        <div class="col-6 col-md-4 col-xl-2">
+            <a href="{% url 'campaigns_dashboard' %}" class="quick-action text-center">
+                <div class="fw-bold mb-1">Open Analytics</div>
+                <div class="text-muted small">Review campaign results</div>
             </a>
-
         </div>
 
-    </div>
-
-
-    <div class="col-md-4">
-
-        <div class="feature-card">
-
-            <span class="badge bg-success status-badge">
-                Available
-            </span>
-
-            <h5>
-                💡 Decision Support
-            </h5>
-
-            <p>
-                Review AI-generated insights and recommendations
-                based on campaign performance information.
-            </p>
-
-            <a
-                href="{% url 'reports_dashboard' %}"
-                class="btn btn-outline-primary"
-            >
-                View Insights
+        <div class="col-6 col-md-4 col-xl-2">
+            <a href="{% url 'knowledge_base_dashboard' %}" class="quick-action text-center">
+                <div class="fw-bold mb-1">Open Knowledge Base</div>
+                <div class="text-muted small">Manage AI documents</div>
             </a>
-
         </div>
 
-    </div>
-
-
-    <div class="col-md-4">
-
-        <div class="feature-card">
-
-            <span class="badge bg-success status-badge">
-                Available
-            </span>
-
-            <h5>
-                💬 Customer Support AI
-            </h5>
-
-            <p>
-                Review customer support conversations and
-                analyze support activity using AI.
-            </p>
-
-            <a
-                href="{% url 'customer_support_dashboard' %}"
-                class="btn btn-primary"
-            >
-                Analyze Support
+        <div class="col-6 col-md-4 col-xl-2">
+            <a href="{% url 'customer_support_dashboard' %}" class="quick-action text-center">
+                <div class="fw-bold mb-1">Support Analytics</div>
+                <div class="text-muted small">Review support conversations</div>
             </a>
+        </div>
+
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+
+        <h5 class="section-title mb-0">
+            Recent Campaigns
+        </h5>
+
+        <a
+            href="{% url 'campaigns_dashboard' %}"
+            class="btn btn-sm btn-outline-primary"
+        >
+            View all
+        </a>
+
+    </div>
+
+    <div class="panel-card mb-5">
+
+        {% if recent_campaigns %}
+
+            <div class="table-responsive">
+
+                <table class="table table-hover align-middle mb-0">
+
+                    <thead class="table-light">
+                        <tr>
+                            <th>Campaign</th>
+                            <th>Company</th>
+                            <th>Platform</th>
+                            <th>Status</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% for campaign in recent_campaigns %}
+
+                            <tr>
+
+                                <td class="fw-semibold">
+                                    {{ campaign.campaign_name }}
+                                </td>
+
+                                <td>
+                                    {{ campaign.company.company_name }}
+                                </td>
+
+                                <td>
+                                    <span class="platform-badge">
+                                        {{ campaign.platform }}
+                                    </span>
+                                </td>
+
+                                <td>
+
+                                    {% if campaign.status == "Active" %}
+                                        <span class="badge bg-success">Active</span>
+                                    {% elif campaign.status == "Completed" %}
+                                        <span class="badge bg-primary">Completed</span>
+                                    {% elif campaign.status == "Paused" %}
+                                        <span class="badge bg-warning text-dark">Paused</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ campaign.status }}</span>
+                                    {% endif %}
+
+                                </td>
+
+                                <td class="text-end">
+                                    <a
+                                        href="{% url 'campaign_analytics_dashboard' campaign.id %}"
+                                        class="btn btn-sm btn-outline-primary"
+                                    >
+                                        Analytics
+                                    </a>
+                                </td>
+
+                            </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        {% else %}
+
+            <div class="p-4 text-center text-muted">
+                No campaigns yet. Create a campaign to see it here.
+            </div>
+
+        {% endif %}
+
+    </div>
+
+    <h5 class="section-title">
+        Marketing Operations
+    </h5>
+
+    <div class="row g-4">
+
+        <div class="col-md-6 col-xl-4">
+
+            <div class="feature-card">
+
+                <span class="badge bg-success status-badge">
+                    Available
+                </span>
+
+                <h5>
+                    🏢 Company Management
+                </h5>
+
+                <p>
+                    Add, edit and delete companies managed by
+                    the Marketing Specialist.
+                </p>
+
+                <a
+                    href="{% url 'companies_dashboard' %}"
+                    class="btn btn-outline-primary"
+                >
+                    Manage Companies
+                </a>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-6 col-xl-4">
+
+            <div class="feature-card">
+
+                <span class="badge bg-success status-badge">
+                    Available
+                </span>
+
+                <h5>
+                    📦 Product Management
+                </h5>
+
+                <p>
+                    Add, edit and delete products and associate
+                    them with their companies.
+                </p>
+
+                <a
+                    href="{% url 'products_dashboard' %}"
+                    class="btn btn-outline-primary"
+                >
+                    Manage Products
+                </a>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-6 col-xl-4">
+
+            <div class="feature-card">
+
+                <span class="badge bg-success status-badge">
+                    Available
+                </span>
+
+                <h5>
+                    📢 Campaign Management
+                </h5>
+
+                <p>
+                    Create, edit and delete marketing campaigns
+                    and access campaign performance analytics.
+                </p>
+
+                <a
+                    href="{% url 'campaigns_dashboard' %}"
+                    class="btn btn-outline-primary"
+                >
+                    Manage Campaigns
+                </a>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-6 col-xl-4">
+
+            <div class="feature-card">
+
+                <span class="badge bg-success status-badge">
+                    Available
+                </span>
+
+                <h5>
+                    🤖 AI Content Generation
+                </h5>
+
+                <p>
+                    Generate marketing content using AI based on
+                    campaign, platform and product information.
+                </p>
+
+                <a
+                    href="{% url 'ai_content_dashboard' %}"
+                    class="btn btn-primary"
+                >
+                    Generate Content
+                </a>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-6 col-xl-4">
+
+            <div class="feature-card">
+
+                <span class="badge bg-success status-badge">
+                    Available
+                </span>
+
+                <h5>
+                    📊 Campaign Analytics
+                </h5>
+
+                <p>
+                    Analyze campaign performance and visualize
+                    important marketing performance indicators.
+                </p>
+
+                <a
+                    href="{% url 'campaigns_dashboard' %}"
+                    class="btn btn-primary"
+                >
+                    View Analytics
+                </a>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-6 col-xl-4">
+
+            <div class="feature-card">
+
+                <span class="badge bg-success status-badge">
+                    Available
+                </span>
+
+                <h5>
+                    💡 Decision Support
+                </h5>
+
+                <p>
+                    Review AI-generated insights and recommendations
+                    based on campaign performance information.
+                </p>
+
+                <a
+                    href="{% url 'reports_dashboard' %}"
+                    class="btn btn-outline-primary"
+                >
+                    View Insights
+                </a>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-6 col-xl-4">
+
+            <div class="feature-card">
+
+                <span class="badge bg-success status-badge">
+                    Available
+                </span>
+
+                <h5>
+                    💬 Support Analytics
+                </h5>
+
+                <p>
+                    Review customer support conversations and
+                    analyze support activity using AI.
+                </p>
+
+                <a
+                    href="{% url 'customer_support_dashboard' %}"
+                    class="btn btn-primary"
+                >
+                    Open Support Analytics
+                </a>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-6 col-xl-4">
+
+            <div class="feature-card">
+
+                <span class="badge bg-success status-badge">
+                    Available
+                </span>
+
+                <h5>
+                    📄 AI Reports
+                </h5>
+
+                <p>
+                    Generate campaign performance reports with
+                    AI-supported insights and recommendations.
+                </p>
+
+                <a
+                    href="{% url 'reports_dashboard' %}"
+                    class="btn btn-primary"
+                >
+                    Generate Report
+                </a>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-6 col-xl-4">
+
+            <div class="feature-card">
+
+                <span class="badge bg-success status-badge">
+                    Available
+                </span>
+
+                <h5>
+                    🧠 Knowledge Base
+                </h5>
+
+                <p>
+                    Upload and manage company documents used as
+                    knowledge resources for AI services.
+                </p>
+
+                <a
+                    href="{% url 'knowledge_base_dashboard' %}"
+                    class="btn btn-primary"
+                >
+                    Manage Knowledge
+                </a>
+
+            </div>
 
         </div>
 
     </div>
 
+    <div class="text-center text-muted mt-5 mb-3">
 
-    <div class="col-md-4">
-
-        <div class="feature-card">
-
-            <span class="badge bg-success status-badge">
-                Available
-            </span>
-
-            <h5>
-                📄 AI Reports
-            </h5>
-
-            <p>
-                Generate campaign performance reports with
-                AI-supported insights and recommendations.
-            </p>
-
-            <a
-                href="{% url 'reports_dashboard' %}"
-                class="btn btn-primary"
-            >
-                Generate Report
-            </a>
-
-        </div>
+        <small>
+            AI Marketing Platform · Marketing Specialist Dashboard
+        </small>
 
     </div>
-
-
-    <div class="col-md-4">
-
-        <div class="feature-card">
-
-            <span class="badge bg-success status-badge">
-                Available
-            </span>
-
-            <h5>
-                🧠 Knowledge Base
-            </h5>
-
-            <p>
-                Upload and manage company documents used as
-                knowledge resources for AI services.
-            </p>
-
-            <a
-                href="{% url 'knowledge_base_dashboard' %}"
-                class="btn btn-primary"
-            >
-                Manage Knowledge
-            </a>
-
-        </div>
-
-    </div>
-
-
-</div>
-
-
-<div class="text-center text-muted mt-5 mb-3">
-
-    <small>
-        AI Marketing Platform · Marketing Specialist Dashboard
-    </small>
-
-</div>
-```
 
 </div>
 
