@@ -1,0 +1,10 @@
+{% for message in messages %}
+    {% if "success" not in message.tags and "info" not in message.tags %}
+        <div
+            class="ex-notice{% if 'error' in message.tags %} is-error{% elif 'warning' in message.tags %} is-warning{% endif %}"
+            role="status"
+        >
+            {{ message }}
+        </div>
+    {% endif %}
+{% endfor %}

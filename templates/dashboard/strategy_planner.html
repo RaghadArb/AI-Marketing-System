@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% include "dashboard/_assets.html" with page_title="AI Strategy Planner" %}
+</head>
+<body class="ex-app">
+{% include "dashboard/_sidebar.html" with active="strategy" %}
+
+<div class="ex-main">
+    <div class="ex-page-header">
+        <div>
+            <div class="ex-kicker">Planning <span class="ex-ai-badge ms-2">AI</span></div>
+            <h2>AI Strategy Planner</h2>
+            <p class="mb-0 opacity-75">
+                Start from a business goal. Review the plan, edit it, then approve
+                a draft campaign. The AI does not launch campaigns on its own.
+            </p>
+        </div>
+    </div>
+
+    {% include "dashboard/_closed_loop.html" with current_step="plan" campaign_id=workflow_campaign_id %}
+
+    {% if error %}
+        <div class="alert alert-warning">{{ error }}</div>
+    {% endif %}
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="form-card">
+                <h4 class="ex-serif mb-2">Brief</h4>
+                <p class="text-muted mb-4">
+                    Provide the business context. Strategy is generated only when you ask.
+                </p>
+
+                <form method="POST" id="strategy-brief-form">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label class="form-label" for="company_id">Company</label>
+                        <select class="form-select" id="company_id" name="company_id" required>
+                            <option value="">Select company</option>
+                            {% for company in companies %}
+                                <option value="{{ company.id }}" {% if form_values.company_id == company.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ company.company_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="product_id">Product</label>
+                        <select class="form-select" id="product_id" name="product_id">
+                            <option value="">No specific product</option>
+                            {% for product in products %}
+                                <option
+                                    value="{{ product.id }}"
+                                    data-company="{{ product.company_id }}"
+                                    {% if form_values.product_id == product.id|stringformat:"s" %}selected{% endif %}
+                                >
+                                    {{ product.product_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="marketing_goal">Marketing goal</label>
+                        <textarea class="form-control" id="marketing_goal" name="marketing_goal" rows="3" required>{{ form_values.marketing_goal }}</textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="target_audience">Target audience</label>
+                        <textarea class="form-control" id="target_audience" name="target_audience" rows="2" required>{{ form_values.target_audience }}</textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="budget">Budget</label>
+                        <input class="form-control" id="budget" name="budget" type="number" min="0" step="0.01" value="{{ form_values.budget }}">
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="start_date">Start date</label>
+                            <input class="form-control" id="start_date" name="start_date" type="date" value="{{ form_values.start_date }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="end_date">End date</label>
+                            <input class="form-control" id="end_date" name="end_date" type="date" value="{{ form_values.end_date }}">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="preferred_platform">Preferred platform (optional)</label>
+                        <select class="form-select" id="preferred_platform" name="preferred_platform">
+                            <option value="">No preference</option>
+                            {% for platform in platforms %}
+                                <option value="{{ platform }}" {% if form_values.preferred_platform == platform %}selected{% endif %}>
+                                    {{ platform }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label" for="additional_information">Additional information</label>
+                        <textarea class="form-control" id="additional_information" name="additional_information" rows="3">{{ form_values.additional_information }}</textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100" name="action" value="{% if strategy %}regenerate_strategy{% else %}generate_strategy{% endif %}">
+                        {% if strategy %}Regenerate Strategy{% else %}Generate Strategy{% endif %}
+                    </button>
+                    {% if strategy %}
+                        <p class="small text-muted mt-2 mb-0">
+                            Regenerating calls the AI again. Creating a campaign does not.
+                        </p>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            {% if strategy %}
+                <form method="POST" class="form-card ai-panel">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="create_campaign_from_strategy">
+                    <input type="hidden" name="company_id" value="{{ form_values.company_id }}">
+                    <input type="hidden" name="product_id" value="{{ form_values.product_id }}">
+                    <input type="hidden" name="marketing_goal" value="{{ form_values.marketing_goal }}">
+                    <input type="hidden" name="brief_target_audience" value="{{ form_values.target_audience }}">
+                    <input type="hidden" name="budget" value="{{ form_values.budget }}">
+                    <input type="hidden" name="start_date" value="{{ form_values.start_date }}">
+                    <input type="hidden" name="end_date" value="{{ form_values.end_date }}">
+                    <input type="hidden" name="preferred_platform" value="{{ form_values.preferred_platform }}">
+                    <input type="hidden" name="additional_information" value="{{ form_values.additional_information }}">
+
+                    <div class="d-flex justify-content-between align-items-start gap-3 mb-4">
+                        <div>
+                            <div class="ex-kicker">Review <span class="ex-ai-badge ms-1">AI plan</span></div>
+                            <h4 class="ex-serif mb-1">AI Marketing Strategy</h4>
+                            <p class="text-muted mb-0">Edit anything before you approve a draft campaign.</p>
+                        </div>
+                    </div>
+
+                    <div class="strategy-section mb-3">
+                        <label class="form-label" for="campaign_objective">Campaign Objective</label>
+                        <textarea class="form-control" id="campaign_objective" name="campaign_objective" rows="3" required>{{ strategy.campaign_objective }}</textarea>
+                    </div>
+
+                    <div class="strategy-section mb-3">
+                        <label class="form-label" for="strategy_target_audience">Target Audience</label>
+                        <textarea class="form-control" id="strategy_target_audience" name="target_audience" rows="2">{{ strategy.target_audience }}</textarea>
+                    </div>
+
+                    <div class="strategy-section mb-3">
+                        <label class="form-label" for="recommended_platform">Recommended Platform</label>
+                        <input class="form-control" id="recommended_platform" name="recommended_platform" value="{{ strategy.recommended_platform }}">
+                    </div>
+
+                    <div class="strategy-section mb-3">
+                        <label class="form-label" for="strategy_summary">Strategy Summary</label>
+                        <textarea class="form-control" id="strategy_summary" name="strategy_summary" rows="4">{{ strategy.strategy_summary }}</textarea>
+                    </div>
+
+                    <div class="strategy-section mb-3">
+                        <label class="form-label" for="content_strategy">Content Strategy</label>
+                        <textarea class="form-control" id="content_strategy" name="content_strategy" rows="4">{% for item in strategy.content_strategy %}{{ item }}{% if not forloop.last %}
+{% endif %}{% endfor %}</textarea>
+                    </div>
+
+                    <div class="strategy-section mb-3">
+                        <label class="form-label" for="creative_direction">Creative Direction</label>
+                        <textarea class="form-control" id="creative_direction" name="creative_direction" rows="3">{{ strategy.creative_direction }}</textarea>
+                    </div>
+
+                    <div class="strategy-section mb-3">
+                        <label class="form-label" for="budget_strategy">Budget Strategy</label>
+                        <textarea class="form-control" id="budget_strategy" name="budget_strategy" rows="3">{{ strategy.budget_strategy }}</textarea>
+                    </div>
+
+                    <div class="strategy-section mb-3">
+                        <label class="form-label" for="recommended_kpis">Recommended KPIs</label>
+                        <textarea class="form-control" id="recommended_kpis" name="recommended_kpis" rows="3">{% for item in strategy.recommended_kpis %}{{ item }}{% if not forloop.last %}
+{% endif %}{% endfor %}</textarea>
+                    </div>
+
+                    <div class="strategy-section mb-3">
+                        <label class="form-label" for="messaging_angle">Messaging Angle</label>
+                        <textarea class="form-control" id="messaging_angle" name="messaging_angle" rows="3">{{ strategy.messaging_angle }}</textarea>
+                    </div>
+
+                    <div class="strategy-section mb-3">
+                        <label class="form-label" for="call_to_action_strategy">CTA Strategy</label>
+                        <textarea class="form-control" id="call_to_action_strategy" name="call_to_action_strategy" rows="3">{{ strategy.call_to_action_strategy }}</textarea>
+                    </div>
+
+                    <div class="strategy-section mb-4">
+                        <label class="form-label" for="reasoning">Why This Strategy?</label>
+                        <textarea class="form-control" id="reasoning" name="reasoning" rows="3">{{ strategy.reasoning }}</textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">
+                        Create Campaign from Strategy
+                    </button>
+                </form>
+            {% else %}
+                <div class="form-card ex-empty">
+                    <svg viewBox="0 0 24 24"><use href="#i-trend"/></svg>
+                    <h4>No strategy yet</h4>
+                    <p class="mb-0">
+                        Complete the brief and generate a plan. Nothing is created until you approve it.
+                    </p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const companySelect = document.getElementById("company_id");
+        const productSelect = document.getElementById("product_id");
+        if (!companySelect || !productSelect) return;
+
+        function filterProducts() {
+            const companyId = companySelect.value;
+            const current = productSelect.value;
+            let keep = false;
+            Array.from(productSelect.options).forEach(function (option) {
+                if (!option.value) {
+                    option.hidden = false;
+                    return;
+                }
+                const match = !companyId || option.getAttribute("data-company") === companyId;
+                option.hidden = !match;
+                if (match && option.value === current) keep = true;
+            });
+            if (!keep) productSelect.value = "";
+        }
+
+        companySelect.addEventListener("change", filterProducts);
+        filterProducts();
+    })();
+</script>
+</body>
+</html>

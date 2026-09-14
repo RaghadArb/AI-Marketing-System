@@ -177,6 +177,12 @@ class CampaignContent(models.Model):
 
 class CampaignPerformance(models.Model):
 
+    SOURCE_CHOICES = [
+        ("", "Manual"),
+        ("demo", "Social demo"),
+        ("live", "Social live"),
+    ]
+
     campaign = models.ForeignKey(
         Campaign,
         on_delete=models.CASCADE,
@@ -210,6 +216,46 @@ class CampaignPerformance(models.Model):
     language = models.CharField(
         max_length=20,
         default="Arabic"
+    )
+
+    source = models.CharField(
+        max_length=20,
+        choices=SOURCE_CHOICES,
+        blank=True,
+        default=""
+    )
+
+    external_post_id = models.CharField(
+        max_length=150,
+        blank=True,
+        default=""
+    )
+
+    impressions = models.PositiveIntegerField(
+        null=True,
+        blank=True
+    )
+
+    reach = models.PositiveIntegerField(
+        null=True,
+        blank=True
+    )
+
+    saves = models.PositiveIntegerField(
+        null=True,
+        blank=True
+    )
+
+    social_permalink = models.CharField(
+        max_length=500,
+        blank=True,
+        default=""
+    )
+
+    social_media_type = models.CharField(
+        max_length=50,
+        blank=True,
+        default=""
     )
 
     recorded_at = models.DateTimeField(

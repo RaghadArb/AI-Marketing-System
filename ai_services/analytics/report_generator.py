@@ -30,12 +30,19 @@ class ReportGenerator:
 
 
         ctr = summary.get(
-            "average_ctr",
-            0
+            "average_ctr"
         )
 
 
-        if ctr < 2:
+        if ctr is None:
+
+            insights.append(
+                "CTR is unavailable because no valid impressions or views "
+                "were recorded."
+            )
+
+
+        elif ctr < 2:
 
             insights.append(
                 "CTR is low."
@@ -62,12 +69,15 @@ class ReportGenerator:
 
 
         engagement = summary.get(
-            "average_engagement_rate",
-            0
+            "average_engagement_rate"
         )
 
 
-        if engagement < 3:
+        if engagement is None:
+            pass
+
+
+        elif engagement < 3:
 
             recommendations.append(
                 "Improve content quality to increase engagement."

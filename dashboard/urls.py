@@ -14,6 +14,7 @@ from .views import (
     analytics_chart,
 
     ai_content_dashboard,
+    marketing_strategy_planner,
     products_dashboard,
     product_create,
     product_edit,
@@ -181,6 +182,12 @@ urlpatterns = [
         name="analytics_chart"
     ),
 
+
+    path(
+        "strategy-planner/",
+        marketing_strategy_planner,
+        name="marketing_strategy_planner"
+    ),
 
     # ======================================================
     # AI CONTENT

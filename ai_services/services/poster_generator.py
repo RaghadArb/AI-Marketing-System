@@ -3,7 +3,7 @@ import re
 from io import BytesIO
 
 from django.core.files.base import ContentFile
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 from ai_services.clients.cloudflare_image_client import (
     CloudflareImageClient,
@@ -22,7 +22,19 @@ class PosterGenerator:
     """
 
     def __init__(self):
-        self.image_client = CloudflareImageClient()
+        self.image_client = None
+
+    def _get_image_client(self):
+        if not (
+            os.getenv("CLOUDFLARE_ACCOUNT_ID")
+            and os.getenv("CLOUDFLARE_API_TOKEN")
+        ):
+            raise RuntimeError(
+                "Cloudflare image generation is not configured."
+            )
+        if self.image_client is None:
+            self.image_client = CloudflareImageClient()
+        return self.image_client
 
     @staticmethod
     def _clean(value):
@@ -210,7 +222,7 @@ class PosterGenerator:
             )
 
         try:
-            return self.image_client.generate_image(
+            return self._get_image_client().generate_image(
                 **kwargs
             )
 
@@ -221,13 +233,124 @@ class PosterGenerator:
                     exc
                 )
             ):
-                return self.image_client.generate_image(
+                return self._get_image_client().generate_image(
                     prompt=prompt,
                     width=1024,
                     height=1024,
                 )
 
             raise
+
+    @staticmethod
+    def _resample_filter():
+        resampling = getattr(Image, "Resampling", None)
+        if resampling is not None:
+            return resampling.LANCZOS
+        return getattr(Image, "LANCZOS", Image.BICUBIC)
+
+    @staticmethod
+    def _load_font(size):
+        candidates = [
+            r"C:\Windows\Fonts\segoeui.ttf",
+            r"C:\Windows\Fonts\arial.ttf",
+            r"C:\Windows\Fonts\tahoma.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        ]
+        for path in candidates:
+            if os.path.exists(path):
+                try:
+                    return ImageFont.truetype(path, size)
+                except OSError:
+                    continue
+        return ImageFont.load_default()
+
+    def _compose_local_poster(
+        self,
+        campaign_content,
+        reference_image=None,
+        fields=None,
+    ):
+        size = 1024
+        poster = Image.new("RGB", (size, size), (23, 32, 51))
+        draw = ImageDraw.Draw(poster)
+        draw.rectangle((0, 0, size, 36), fill=(47, 111, 102))
+        draw.rectangle((0, size - 120, size, size), fill=(16, 22, 34))
+
+        fields = fields or self._extract_fields(
+            campaign_content.content_text
+        )
+        campaign = campaign_content.campaign
+        product = getattr(campaign, "product", None)
+        headline = (
+            self._clean(fields.get("title"))
+            or self._clean(campaign_content.title)
+            or self._clean(getattr(campaign, "campaign_name", ""))
+            or "Campaign poster"
+        )
+        supporting = (
+            self._clean(fields.get("cta"))
+            or self._clean(getattr(product, "product_name", "") if product else "")
+            or self._clean(getattr(campaign.company, "company_name", ""))
+        )
+
+        product_image = None
+        if reference_image and reference_image.get("bytes"):
+            try:
+                product_image = Image.open(
+                    BytesIO(reference_image["bytes"])
+                ).convert("RGB")
+            except Exception:
+                product_image = None
+
+        if product_image is None:
+            image_field = getattr(product, "product_image", None) if product else None
+            if image_field and getattr(image_field, "name", None):
+                try:
+                    image_field.open("rb")
+                    product_image = Image.open(image_field).convert("RGB")
+                except Exception:
+                    product_image = None
+                finally:
+                    try:
+                        image_field.close()
+                    except Exception:
+                        pass
+
+        if product_image is not None:
+            product_image.thumbnail((720, 560), self._resample_filter())
+            offset = (
+                (size - product_image.width) // 2,
+                120 + (560 - product_image.height) // 2,
+            )
+            poster.paste(product_image, offset)
+        else:
+            draw.rounded_rectangle(
+                (180, 160, 844, 680),
+                radius=28,
+                outline=(47, 111, 102),
+                width=4,
+            )
+
+        title_font = self._load_font(42)
+        support_font = self._load_font(24)
+        draw.text(
+            (64, size - 96),
+            headline[:48],
+            fill=(255, 255, 255),
+            font=title_font,
+        )
+        if supporting:
+            draw.text(
+                (64, size - 50),
+                supporting[:52],
+                fill=(184, 196, 212),
+                font=support_font,
+            )
+
+        buffer = BytesIO()
+        poster.save(buffer, format="PNG")
+        return buffer.getvalue()
 
     def _build_primary_prompt(
         self,
@@ -557,22 +680,37 @@ No watermarks.
 
         except RuntimeError as exc:
 
-            if not self._is_cloudflare_flagged_error(
-                exc
-            ):
-                raise
-
-            safe_prompt = (
-                self._build_safe_retry_prompt(
-                    campaign_content,
-                    creative_brief,
-                    has_product_reference=has_product_reference,
+            if self._is_cloudflare_flagged_error(exc):
+                safe_prompt = (
+                    self._build_safe_retry_prompt(
+                        campaign_content,
+                        creative_brief,
+                        has_product_reference=has_product_reference,
+                    )
                 )
-            )
+                try:
+                    image_bytes = self._generate_image(
+                        safe_prompt,
+                        reference_image=reference_image,
+                    )
+                except Exception:
+                    image_bytes = self._compose_local_poster(
+                        campaign_content,
+                        reference_image=reference_image,
+                        fields=fields,
+                    )
+            else:
+                image_bytes = self._compose_local_poster(
+                    campaign_content,
+                    reference_image=reference_image,
+                    fields=fields,
+                )
 
-            image_bytes = self._generate_image(
-                safe_prompt,
+        except Exception:
+            image_bytes = self._compose_local_poster(
+                campaign_content,
                 reference_image=reference_image,
+                fields=fields,
             )
 
         campaign = (

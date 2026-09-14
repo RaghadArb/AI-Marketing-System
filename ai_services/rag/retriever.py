@@ -28,3 +28,26 @@ class Retriever:
         )
 
         return results
+
+    def retrieve_evidence(
+        self,
+        question,
+        company_id,
+        n_results=3,
+    ):
+        from ai_services.analytics.knowledge_support import parse_query_results
+
+        query_embedding = self.embedding_service.create_embedding(
+            question
+        )
+        results = self.vector_store.search_with_evidence(
+            embedding=query_embedding,
+            company_id=company_id,
+            n_results=n_results,
+        )
+        hits, has_distances = parse_query_results(results)
+        return {
+            "hits": hits,
+            "has_distances": has_distances,
+            "space": self.vector_store.distance_space(),
+        }

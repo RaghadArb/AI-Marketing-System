@@ -1,0 +1,51 @@
+{% include "dashboard/_icon_sprite.html" %}
+<aside class="ex-sidebar">
+    <div class="ex-brand">
+        {% include "dashboard/_brand_mark.html" %}
+        <div>
+            <p class="ex-brand-title">AI.MarketPilot</p>
+            <p class="ex-brand-sub">Marketing Suite</p>
+        </div>
+    </div>
+    <nav class="ex-nav">
+        <p class="ex-nav-label">Workspace</p>
+        <a href="{% url 'dashboard_home' %}" class="{% if active == 'home' %}active{% endif %}">
+            <svg viewBox="0 0 24 24"><use href="#i-grid"/></svg> Overview
+        </a>
+        <a href="{% url 'companies_dashboard' %}" class="{% if active == 'companies' or active == 'overview' %}active{% endif %}">
+            <svg viewBox="0 0 24 24"><use href="#i-building"/></svg> Companies
+        </a>
+        <a href="{% url 'products_dashboard' %}" class="{% if active == 'products' %}active{% endif %}">
+            <svg viewBox="0 0 24 24"><use href="#i-box"/></svg> Products
+        </a>
+        <p class="ex-nav-label">Campaigns</p>
+        <a href="{% url 'campaigns_dashboard' %}" class="{% if active == 'campaigns' %}active{% endif %}">
+            <svg viewBox="0 0 24 24"><use href="#i-megaphone"/></svg> Campaigns
+        </a>
+        <a href="{% url 'marketing_strategy_planner' %}" class="{% if active == 'strategy' %}active{% endif %}">
+            <svg viewBox="0 0 24 24"><use href="#i-trend"/></svg> AI Strategy Planner
+        </a>
+        <a href="{% url 'ai_content_dashboard' %}" class="{% if active == 'ai' or active == 'ai_content' %}active{% endif %}">
+            <svg viewBox="0 0 24 24"><use href="#i-spark"/></svg> Content Studio
+        </a>
+        <a href="{% url 'campaigns_dashboard' %}" class="{% if active == 'analytics' %}active{% endif %}">
+            <svg viewBox="0 0 24 24"><use href="#i-chart"/></svg> Analytics
+        </a>
+        <a href="{% url 'reports_dashboard' %}" class="{% if active == 'reports' %}active{% endif %}">
+            <svg viewBox="0 0 24 24"><use href="#i-file"/></svg> Reports
+        </a>
+        <p class="ex-nav-label">Support</p>
+        <a href="{% url 'customer_support_dashboard' %}" class="{% if active == 'support' %}active{% endif %}">
+            <svg viewBox="0 0 24 24"><use href="#i-chat"/></svg> Support Agent
+        </a>
+        <a href="{% url 'customer_support_dashboard' %}#support-analytics" class="{% if active == 'support_analytics' %}active{% endif %}">
+            <svg viewBox="0 0 24 24"><use href="#i-trend"/></svg> Support Analytics
+        </a>
+        <a href="{% url 'knowledge_base_dashboard' %}" class="{% if active == 'knowledge' %}active{% endif %}">
+            <svg viewBox="0 0 24 24"><use href="#i-book"/></svg> Knowledge Base
+        </a>
+    </nav>
+    <div class="ex-logout">
+        <a href="{% url 'logout' %}" class="btn btn-outline-light w-100">Sign out</a>
+    </div>
+</aside>

@@ -15,114 +15,94 @@
         href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
         rel="stylesheet"
     >
+    {% load static %}
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
+    <link href="{% static 'dashboard/executive.css' %}?v=studio-loop-btns" rel="stylesheet">
 
     <style>
-        body {
-            background: #f4f7fb;
-            font-family: Arial, sans-serif;
+        html body.ex-app {
+            background: #e6e8ee !important;
         }
 
-        .page-header {
-            background: #172033;
-            color: white;
-            padding: 30px;
-            border-radius: 14px;
-            margin-bottom: 30px;
+        html body.ex-app .content-card,
+        html body.ex-app .results-panel {
+            height: auto;
+            background: #fff;
+            border: 1px solid #d5dae3;
+            box-shadow: 0 8px 24px rgba(16, 24, 40, 0.06);
         }
 
-        .content-card {
-            background: white;
-            border-radius: 14px;
+        .content-card,
+        .results-panel {
             padding: 28px;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
-            height: 100%;
-        }
-
-        .ai-icon {
-            width: 60px;
-            height: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #eee8ff;
-            border-radius: 14px;
-            font-size: 28px;
-            margin-bottom: 20px;
-        }
-
-        .campaign-info {
-            background: #f8f9fc;
-            padding: 15px;
             border-radius: 10px;
         }
 
-        .results-panel {
-            background: white;
-            border-radius: 14px;
-            padding: 28px;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
-            min-height: 100%;
+        .ai-icon {
+            width: 40px;
+            height: 40px;
+            margin-bottom: 16px;
+        }
+
+        .campaign-info,
+        .creative-brief,
+        .suggestion-content,
+        .edit-box {
+            background: #eef1f6;
+            border: 1px solid #d5dae3;
+            border-radius: 8px;
+            padding: 16px;
         }
 
         .creative-brief {
-            background: #f8f9fc;
-            border: 1px solid #e3e7ee;
-            border-radius: 12px;
-            padding: 18px;
-        }
-
-        .creative-brief textarea,
-        .creative-brief input,
-        .creative-brief select {
-            font-size: 14px;
-        }
-
-        .creative-brief .form-text {
-            font-size: 12px;
+            margin-top: 4px;
         }
 
         .suggestion-card {
-            border: 1px solid #e3e7ee;
-            border-left: 5px solid #0d6efd;
-            border-radius: 12px;
-            padding: 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            border: 1px solid #d5dae3;
+            border-left: 3px solid #667085;
+            border-radius: 10px;
+            padding: 20px;
             margin-bottom: 20px;
-            background: #ffffff;
+            background: #f7f8fb;
+            overflow: hidden;
+            position: relative;
         }
 
         .suggestion-card.selected {
-            border-color: #198754;
-            border-left-color: #198754;
-            background: #f4fff8;
-            box-shadow: 0 0 0 1px rgba(25, 135, 84, 0.2);
+            border-color: #2f6f66;
+            border-left-color: #2f6f66;
+            background: #eef7f4;
         }
 
         .studio-label {
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
-            color: #6c757d;
+            color: #667085;
             text-transform: uppercase;
-            letter-spacing: 0.04em;
-            margin-bottom: 4px;
+            letter-spacing: 0.06em;
+            margin-bottom: 6px;
         }
 
         .suggestion-number {
             display: inline-block;
-            background: #e8f1ff;
-            color: #0d6efd;
-            padding: 6px 11px;
-            border-radius: 20px;
-            font-size: 13px;
+            background: #172033;
+            color: #fff;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 12px;
             font-weight: 700;
         }
 
         .poster-frame {
             width: 100%;
-            background: #f8f9fc;
-            border: 1px solid #e7eaf0;
-            border-radius: 12px;
+            background: #e8ebf0;
+            border: 1px solid #d5dae3;
+            border-radius: 8px;
             overflow: hidden;
-            margin-bottom: 18px;
         }
 
         .poster-frame img {
@@ -133,83 +113,129 @@
         }
 
         .poster-missing {
-            min-height: 220px;
+            min-height: 180px;
             display: flex;
             align-items: center;
             justify-content: center;
             text-align: center;
-            padding: 25px;
-            color: #6c757d;
+            padding: 24px;
+            color: #667085;
         }
 
-        .suggestion-content {
-            background: #f8f9fc;
-            border-radius: 10px;
-            padding: 18px;
-            white-space: pre-wrap;
-            line-height: 1.8;
+        .suggestion-copy {
+            background: #fff;
+            border: 1px solid #d5dae3;
+            border-radius: 8px;
+            padding: 14px 16px;
+            line-height: 1.65;
         }
 
         .content-editor {
-            min-height: 250px;
+            min-height: 220px;
             line-height: 1.7;
             resize: vertical;
-        }
-
-        .edit-box {
-            background: #f8f9fc;
-            border-radius: 10px;
-            padding: 18px;
-            margin-top: 18px;
+            background: #fff;
         }
 
         .empty-output {
-            min-height: 430px;
+            min-height: 360px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             text-align: center;
+            background: #eef1f6;
+            border: 1px dashed #c9d0db;
+            border-radius: 10px;
+            padding: 32px;
+        }
+
+        .studio-notice {
+            border: 1px solid #d5dae3;
+            border-left: 4px solid #172033;
+            border-radius: 10px;
+            background: #fff;
+            padding: 14px 16px;
+            margin-bottom: 20px;
+        }
+
+        .studio-notice.is-success {
+            border-left-color: #2f6f66;
+            background: #e7f4ef;
+            color: #1f6b57;
+        }
+
+        .studio-notice.is-error {
+            border-left-color: #9b3a3a;
+            background: #f8e8e8;
+            color: #9b3a3a;
+        }
+
+        .studio-notice.is-warning {
+            border-left-color: #8a6418;
+            background: #f8efd8;
+            color: #8a6418;
+        }
+
+        .studio-notice.is-info {
+            border-left-color: #172033;
+            background: #eef2f6;
+            color: #1f2937;
+        }
+
+        .studio-notice h5 {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .instagram-note {
+            background: #eef2f6;
+            border: 1px solid #d5dae3;
+            border-radius: 10px;
+            padding: 16px 18px;
+            margin-bottom: 20px;
+        }
+
+        html body.ex-app .page-header {
+            width: 100%;
+        }
+
+        html body.ex-app .page-header .studio-dashboard-link {
+            margin-left: auto;
+            flex-shrink: 0;
+            color: #172033 !important;
+            text-decoration: none !important;
         }
     </style>
 </head>
 
-<body{% if workspace_company %} class="has-company-workspace"{% endif %}>
+<body class="ex-app{% if workspace_company %} has-company-workspace{% endif %}">
+{% if not workspace_company %}
+{% include "dashboard/_sidebar.html" with active="ai" %}
+{% endif %}
 
 {% include "dashboard/_company_workspace.html" %}
 
-<div class="container py-5">
+<div class="{% if workspace_company %}container pb-5{% else %}ex-main{% endif %}">
 
-    {% if messages %}
+    {% include "dashboard/_closed_loop.html" with current_step=workflow_step|default:"generate" campaign_id=selected_campaign.id persist_studio=True %}
 
-        {% for message in messages %}
-
-            <div
-                class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show"
-                role="alert"
-            >
-                {{ message }}
-
-                <button
-                    type="button"
-                    class="btn-close"
-                    data-bs-dismiss="alert"
-                    aria-label="Close"
-                ></button>
-            </div>
-
-        {% endfor %}
-
-    {% endif %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <a class="btn btn-outline-secondary js-studio-nav" href="{{ studio_back_url }}">
+            ← Back
+        </a>
+        <a class="btn btn-outline-primary js-studio-nav" href="{{ studio_next_url }}">
+            Next →
+        </a>
+    </div>
 
     <div class="page-header">
-
-        <div class="d-flex justify-content-between align-items-center">
 
             <div>
 
                 <h1 class="mb-2">
-                    🤖 AI Content Generation
+                    Content Studio
                 </h1>
 
                 <p class="mb-0 opacity-75">
@@ -220,16 +246,14 @@
 
             <a
                 href="{% if workspace_company %}{% url 'company_workspace' workspace_company.id %}{% else %}{% url 'dashboard_home' %}{% endif %}"
-                class="btn btn-light"
+                class="btn btn-light studio-dashboard-link"
             >
                 ← {% if workspace_company %}Overview{% else %}Dashboard{% endif %}
             </a>
 
-        </div>
-
     </div>
 
-    <div class="alert alert-light border mb-4">
+    <div class="instagram-note">
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
             <div>
                 Instagram publishing integration is implemented.
@@ -259,12 +283,12 @@
 
             <div class="content-card">
 
-                <div class="ai-icon">
-                    🤖
+                <div class="ai-icon ex-icon-wrap">
+                    <svg viewBox="0 0 24 24"><use href="#i-spark"/></svg>
                 </div>
 
                 <h4>
-                    Creative Brief
+                    Creative Brief <span class="ex-ai-badge">AI</span>
                 </h4>
 
                 <p class="text-muted mb-4">
@@ -272,7 +296,7 @@
                     Generated posts appear in the content studio on the right.
                 </p>
 
-                <form method="POST">
+                <form method="POST" id="studio-brief-form">
 
                     {% csrf_token %}
 
@@ -281,6 +305,8 @@
                         name="action"
                         value="generate"
                     >
+                    <input type="hidden" name="next" value="">
+                    <input type="hidden" name="stage" value="{{ workflow_step|default:'generate' }}">
 
                     <div class="mb-4">
 
@@ -324,7 +350,7 @@
                         <div class="d-flex align-items-center justify-content-between mb-3">
                             <div>
                                 <h5 class="mb-1">
-                                    🎨 Poster Creative Brief
+                                    Poster Creative Brief
                                 </h5>
                                 <small class="text-muted">
                                     Tell the AI how you want the advertisement to look.
@@ -530,7 +556,7 @@
                             type="submit"
                             class="btn btn-primary btn-lg"
                         >
-                            ✨ Generate Content + Posters
+                            Generate content and posters
                         </button>
 
                     </div>
@@ -549,12 +575,14 @@
 
             <div class="results-panel">
 
+                {% include "dashboard/_notices.html" %}
+
                 {% if error %}
 
-                    <div class="alert alert-danger mb-0">
+                    <div class="studio-notice is-error">
 
                         <h5>
-                            Content Generation Failed
+                            Content could not be generated
                         </h5>
 
                         <p class="mb-0">
@@ -641,7 +669,7 @@
                                 <div class="poster-frame">
                                     <div class="poster-missing">
                                         <div>
-                                            <div style="font-size: 38px;">🖼️</div>
+                                            <svg viewBox="0 0 24 24"><use href="#i-image"/></svg>
                                             <div class="fw-semibold mt-2">Poster generation failed</div>
                                             <small>The text suggestion was still saved.</small>
                                         </div>
@@ -656,33 +684,34 @@
 
                             {% if suggestion.display.parsed %}
                                 {% if suggestion.display.caption %}
-                                    <div class="mb-3">
+                                    <div class="suggestion-copy">
                                         <div class="studio-label">Caption</div>
                                         <div dir="auto">{{ suggestion.display.caption }}</div>
                                     </div>
                                 {% endif %}
                                 {% if suggestion.display.cta %}
-                                    <div class="mb-3">
-                                        <div class="studio-label">CTA</div>
+                                    <div class="suggestion-copy">
+                                        <div class="studio-label">Call to action</div>
                                         <div dir="auto">{{ suggestion.display.cta }}</div>
                                     </div>
                                 {% endif %}
                                 {% if suggestion.display.hashtags %}
-                                    <div class="mb-3">
+                                    <div class="suggestion-copy">
                                         <div class="studio-label">Hashtags</div>
                                         <div dir="ltr">{{ suggestion.display.hashtags }}</div>
                                     </div>
                                 {% endif %}
                             {% else %}
                                 <div
-                                    class="suggestion-content"
+                                    class="suggestion-copy"
                                     dir="auto"
+                                    style="white-space: pre-wrap;"
                                 >{{ suggestion.content }}</div>
                             {% endif %}
 
                             {% if suggestion.publish_error and not suggestion.is_published %}
 
-                                <div class="alert alert-warning mt-3 mb-0 py-2">
+                                <div class="studio-notice is-warning mb-0">
                                     {{ suggestion.publish_error }}
                                 </div>
 
@@ -717,6 +746,10 @@
 
                                     {% else %}
 
+                                        <p class="form-text mb-2">
+                                            Instagram publishing is optional. Continue to Measure and Learn without it.
+                                        </p>
+
                                         {% if instagram_configured %}
 
                                         <form
@@ -740,27 +773,12 @@
 
                                             <button
                                                 type="submit"
-                                                class="btn btn-primary"
+                                                class="btn btn-outline-primary"
                                             >
-                                                Publish to Instagram
+                                                Optional: Publish to Instagram
                                             </button>
 
                                         </form>
-
-                                        {% else %}
-
-                                        <div>
-                                            <button
-                                                type="button"
-                                                class="btn btn-primary"
-                                                disabled
-                                            >
-                                                Publish to Instagram
-                                            </button>
-                                            <div class="form-text mt-2">
-                                                Instagram publishing is available but requires a connected Meta Developer account. Live account connection is not configured in this environment.
-                                            </div>
-                                        </div>
 
                                         {% endif %}
 
@@ -802,7 +820,7 @@
                                     data-bs-target="#edit-{{ suggestion.id }}"
                                     aria-expanded="false"
                                 >
-                                    ✏️ Edit
+                                    Edit
                                 </button>
 
                             </div>
@@ -865,7 +883,7 @@
                                             type="submit"
                                             class="btn btn-primary"
                                         >
-                                            💾 Save Changes
+                                            Save Changes
                                         </button>
 
                                     </form>
@@ -878,13 +896,35 @@
 
                     {% endfor %}
 
+                    {% if has_selected_content and selected_campaign %}
+                        <div class="studio-notice is-info mt-2 mb-0">
+                            <h5>Next steps</h5>
+                            <p class="mb-3">
+                                Content is selected. Instagram publishing is optional.
+                                Continue the marketing loop without it.
+                            </p>
+                            <div class="d-flex flex-wrap gap-2">
+                                <a
+                                    class="btn btn-primary js-studio-nav"
+                                    href="{% url 'campaign_analytics_dashboard' selected_campaign.id %}"
+                                >
+                                    Measure performance
+                                </a>
+                                <a
+                                    class="btn btn-outline-primary js-studio-nav"
+                                    href="{% url 'reports_dashboard' %}?campaign={{ selected_campaign.id }}"
+                                >
+                                    Learn / recommendations
+                                </a>
+                            </div>
+                        </div>
+                    {% endif %}
+
                 {% else %}
 
-                    <div class="empty-output">
+                    <div class="empty-output ex-empty">
 
-                        <div style="font-size: 60px; margin-bottom: 20px;">
-                            ✨
-                        </div>
+                        <svg viewBox="0 0 24 24"><use href="#i-spark"/></svg>
 
                         <h4>
                             Your AI Content Will Appear Here
@@ -909,6 +949,38 @@
 <script
     src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
 ></script>
+<script>
+(function () {
+    var form = document.getElementById("studio-brief-form");
+    if (!form) {
+        return;
+    }
+
+    function persistThenGo(url) {
+        var actionInput = form.querySelector('input[name="action"]');
+        var nextInput = form.querySelector('input[name="next"]');
+        if (actionInput) {
+            actionInput.value = "save_studio_state";
+        }
+        if (nextInput) {
+            nextInput.value = url;
+        }
+        form.noValidate = true;
+        form.submit();
+    }
+
+    document.querySelectorAll(".js-studio-nav, .js-studio-step").forEach(function (link) {
+        link.addEventListener("click", function (event) {
+            var href = link.getAttribute("href");
+            if (!href || href === "#") {
+                return;
+            }
+            event.preventDefault();
+            persistThenGo(href);
+        });
+    });
+})();
+</script>
 
 </body>
 

@@ -17,15 +17,13 @@
     href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
     rel="stylesheet"
 >
+{% load static %}
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
+<link href="{% static 'dashboard/executive.css' %}" rel="stylesheet">
 
 <style>
 
-    body {
-        background: #f4f7fb;
-        font-family: Arial, sans-serif;
-    }
-
-    .page-header {
+        .page-header {
         background: #172033;
         color: white;
         padding: 28px;
@@ -47,8 +45,8 @@
     }
 
     .company-badge {
-        background: #e8f1ff;
-        color: #0d6efd;
+        background: #eef2f6;
+        color: #344054;
         border-radius: 20px;
         padding: 6px 10px;
         font-size: 12px;
@@ -58,11 +56,14 @@
 
 </head>
 
-<body{% if workspace_company %} class="has-company-workspace"{% endif %}>
+<body class="ex-app{% if workspace_company %} has-company-workspace{% endif %}">
+{% if not workspace_company %}
+{% include "dashboard/_sidebar.html" with active="knowledge" %}
+{% endif %}
 
 {% include "dashboard/_company_workspace.html" %}
 
-<div class="container py-5">
+<div class="{% if workspace_company %}container pb-5{% else %}ex-main{% endif %}">
 
 <div class="page-header">
 
@@ -71,7 +72,7 @@
         <div>
 
             <h2>
-                🧠 Knowledge Base
+                Knowledge Base
             </h2>
 
             <p class="mb-0 opacity-75">
@@ -103,25 +104,7 @@
 </div>
 
 
-{% if messages %}
-
-    {% for message in messages %}
-
-        <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show">
-
-            {{ message }}
-
-            <button
-                type="button"
-                class="btn-close"
-                data-bs-dismiss="alert"
-            ></button>
-
-        </div>
-
-    {% endfor %}
-
-{% endif %}
+{% include "dashboard/_notices.html" %}
 
 
 <div class="row g-4">
@@ -132,8 +115,8 @@
 
             <div class="document-card">
 
-                <div class="document-icon">
-                    📄
+                <div class="document-icon ex-icon-wrap">
+                    <svg viewBox="0 0 24 24"><use href="#i-file"/></svg>
                 </div>
 
                 <div class="d-flex justify-content-between align-items-start mb-2">
@@ -159,11 +142,11 @@
                 <div class="mb-3">
                     <div class="small text-muted mb-1">RAG Status</div>
                     {% if document.rag_state.state == "indexed" %}
-                        <span class="badge bg-success">● Indexed</span>
+                        <span class="badge bg-success">Indexed</span>
                     {% elif document.rag_state.state == "not_indexed" %}
-                        <span class="badge bg-warning text-dark">● Not Indexed</span>
+                        <span class="badge bg-warning text-dark">Not Indexed</span>
                     {% else %}
-                        <span class="badge bg-secondary">● Indexing unavailable</span>
+                        <span class="badge bg-secondary">Indexing unavailable</span>
                     {% endif %}
                     <div class="small text-muted mt-2 mb-0">
                         Stored in MySQL
@@ -248,9 +231,8 @@
         <div class="col-12">
 
             <div class="document-card text-center py-5">
-
-                <div style="font-size: 55px;">
-                    🧠
+                <div class="ex-icon-wrap mx-auto">
+                    <svg viewBox="0 0 24 24"><use href="#i-book"/></svg>
                 </div>
 
                 <h4 class="mt-3">

@@ -14,6 +14,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 
+# Chart rendering runs inside Django request threads; never use a GUI backend.
+os.environ.setdefault("MPLBACKEND", "Agg")
+
 
 
 
@@ -180,3 +183,8 @@ INSTAGRAM_PUBLIC_MEDIA_BASE_URL = os.getenv(
     "INSTAGRAM_PUBLIC_MEDIA_BASE_URL",
     ""
 ).strip()
+
+_social_mode = os.getenv("SOCIAL_PERFORMANCE_MODE", "demo").strip().lower()
+SOCIAL_PERFORMANCE_MODE = (
+    _social_mode if _social_mode in ("demo", "live") else "demo"
+)

@@ -154,11 +154,11 @@ class CampaignPerformanceAdmin(admin.ModelAdmin):
     list_display = (
         "campaign",
         "platform",
+        "source",
+        "external_post_id",
+        "impressions",
         "views",
         "clicks",
-        "likes",
-        "shares",
-        "comments",
         "recorded_at",
     )
 

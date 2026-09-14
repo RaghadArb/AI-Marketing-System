@@ -1,5 +1,8 @@
 import os
 import re
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
+from urllib.parse import urlparse
 
 from django.conf import settings
 from django.shortcuts import (
@@ -9,13 +12,16 @@ from django.shortcuts import (
 )
 from django.http import FileResponse, Http404
 from django.contrib import messages
+from django.urls import reverse
 
 from campaign.models import Campaign, CampaignContent
 from companies.models import Company
 from companies.forms import CompanyForm
 from campaign.forms import CampaignForm
 
+from ai_services.analytics.intelligence import CampaignIntelligence
 from ai_services.analytics.service import AnalyticsService
+from ai_services.services.customer_voice_analyzer import CustomerVoiceAnalyzer
 from ai_services.rag.ingestion import DocumentIngestionService
 from ai_services.rag.vector_store import VectorStore
 from ai_services.services.campaign_advisor import CampaignAdvisor
@@ -25,10 +31,35 @@ from ai_services.services.instagram_publisher import (
     InstagramPublishError,
     InstagramPublisher,
 )
+from ai_services.services.marketing_strategy_agent import (
+    MarketingStrategyAgent,
+    StrategyGenerationError,
+)
+from ai_services.services.social_performance_importer import (
+    SocialPerformanceImporter,
+)
 from ai_services.services.poster_generator import PosterGenerator
 
 from .decorators import marketing_specialist_required
 from .presentation import parse_suggestion_display
+from .strategy_store import (
+    UNMAPPED_CAMPAIGN_FIELDS,
+    brief_from_strategy,
+    campaign_name_from_strategy,
+    company_brief,
+    load_campaign_strategy,
+    load_creative_brief,
+    load_draft,
+    map_platform,
+    product_brief,
+    remember_workflow_campaign,
+    save_campaign_strategy,
+    save_creative_brief,
+    save_draft,
+    strategy_context_for_advisor,
+    strategy_from_post,
+    workflow_campaign_id,
+)
 from .workspace import (
     limit_campaign_form_to_company,
     limit_form_to_company,
@@ -308,11 +339,6 @@ def company_create(request):
 
             company.save()
 
-            messages.success(
-                request,
-                "Company added successfully."
-            )
-
             return redirect(
                 "companies_dashboard"
             )
@@ -355,11 +381,6 @@ def company_edit(
         if form.is_valid():
 
             form.save()
-
-            messages.success(
-                request,
-                "Company updated successfully."
-            )
 
             return redirect_company_scope(
                 request,
@@ -413,11 +434,6 @@ def company_delete(
         )
 
         company.delete()
-
-        messages.success(
-            request,
-            f"{company_name} deleted successfully."
-        )
 
     return redirect(
         "companies_dashboard"
@@ -482,11 +498,6 @@ def product_create(request):
         if form.is_valid():
 
             form.save()
-
-            messages.success(
-                request,
-                "Product added successfully."
-            )
 
             return redirect_company_scope(
                 request,
@@ -554,11 +565,6 @@ def product_edit(
 
             form.save()
 
-            messages.success(
-                request,
-                "Product updated successfully."
-            )
-
             return redirect_company_scope(
                 request,
                 "products_dashboard",
@@ -610,11 +616,6 @@ def product_delete(
         )
 
         product.delete()
-
-        messages.success(
-            request,
-            f"{product_name} deleted successfully."
-        )
 
     return redirect_company_scope(
         request,
@@ -711,15 +712,9 @@ def campaign_create(request):
 
                     campaign.save()
 
-                    messages.success(
+                    return _continue_to_content_studio(
                         request,
-                        "Campaign created successfully."
-                    )
-
-                    return redirect_company_scope(
-                        request,
-                        "campaigns_dashboard",
-                        "company_campaigns_dashboard",
+                        campaign,
                     )
 
     else:
@@ -735,7 +730,7 @@ def campaign_create(request):
         {
             "form": form,
             "page_title": "Add Campaign",
-            "button_text": "Add Campaign",
+            "button_text": "Save and generate",
         }
     )
 
@@ -743,6 +738,333 @@ def campaign_create(request):
         request,
         "dashboard/campaign_form.html",
         workspace,
+    )
+
+
+def _safe_dashboard_next(next_url):
+    path = str(next_url or "").strip()
+    parsed = urlparse(path)
+    if parsed.scheme or parsed.netloc:
+        return None
+    if path.startswith("/dashboard/"):
+        return path
+    return None
+
+
+def _content_studio_url(request, campaign=None, stage="generate"):
+    workspace_id = workspace_id_from_request(request)
+    if workspace_id:
+        path = reverse(
+            "company_ai_content_dashboard",
+            args=[workspace_id],
+        )
+    else:
+        path = reverse("ai_content_dashboard")
+    query = []
+    if campaign is not None:
+        query.append(f"campaign={campaign.id}")
+    if stage in ("generate", "review"):
+        query.append(f"stage={stage}")
+    if query:
+        return f"{path}?{'&'.join(query)}"
+    return path
+
+
+def _continue_to_content_studio(request, campaign):
+    remember_workflow_campaign(request, campaign.id)
+    next_url = _safe_dashboard_next(request.POST.get("next"))
+    stage = "generate"
+    if next_url and "stage=review" in next_url:
+        stage = "review"
+    if next_url and "ai-content" not in next_url:
+        if "/campaigns/" in next_url and next_url.rstrip("/").endswith("edit"):
+            return redirect(
+                _content_studio_url(request, campaign, "generate")
+            )
+        return redirect(next_url)
+    return redirect(_content_studio_url(request, campaign, stage))
+
+
+def _latest_studio_suggestions(campaign):
+    latest_contents = list(
+        CampaignContent.objects.filter(
+            campaign=campaign,
+            ai_generated=True,
+        ).order_by("-created_at")[:3]
+    )
+    latest_contents.reverse()
+    return [_suggestion_payload(item) for item in latest_contents]
+
+
+def _brief_from_post(post):
+    return {
+        "focus": post.get("creative_focus", "").strip(),
+        "style": post.get("creative_style", "Premium Product Ad").strip(),
+        "colors": post.get("creative_colors", "").strip(),
+        "background": post.get("creative_background", "").strip(),
+        "composition": post.get(
+            "creative_composition",
+            "Product Centered",
+        ).strip(),
+        "mood": post.get("creative_mood", "").strip(),
+        "additional": post.get("creative_additional", "").strip(),
+    }
+
+
+def _parse_optional_date(value):
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.strptime(text, "%Y-%m-%d").date()
+    except ValueError:
+        return False
+
+
+def _owned_strategy_company_product(request, company_id, product_id):
+    company = get_object_or_404(
+        Company,
+        id=company_id,
+        owner=request.user,
+    )
+    product = None
+    if product_id:
+        product = get_object_or_404(
+            Product,
+            id=product_id,
+            company__owner=request.user,
+        )
+        if product.company_id != company.id:
+            return company, None, (
+                "The selected product does not belong to the selected company."
+            )
+    return company, product, None
+
+
+@marketing_specialist_required
+def marketing_strategy_planner(request):
+    companies = Company.objects.filter(
+        owner=request.user
+    ).order_by("company_name")
+
+    products = (
+        Product.objects
+        .filter(company__owner=request.user)
+        .select_related("company")
+        .order_by("product_name")
+    )
+
+    form_values = {
+        "company_id": request.GET.get("company") or "",
+        "product_id": request.GET.get("product") or "",
+        "marketing_goal": "",
+        "target_audience": "",
+        "budget": "",
+        "start_date": "",
+        "end_date": "",
+        "preferred_platform": "",
+        "additional_information": "",
+    }
+    strategy = None
+    error = None
+    unmapped_fields = UNMAPPED_CAMPAIGN_FIELDS
+
+    if request.method != "POST":
+        draft = load_draft(request)
+        if draft:
+            form_values.update(draft.get("form") or {})
+            strategy = draft.get("strategy")
+            if request.GET.get("company"):
+                form_values["company_id"] = request.GET.get("company")
+
+    if request.method == "POST":
+        action = request.POST.get("action", "generate_strategy")
+        form_values = {
+            "company_id": request.POST.get("company_id", "").strip(),
+            "product_id": request.POST.get("product_id", "").strip(),
+            "marketing_goal": request.POST.get("marketing_goal", "").strip(),
+            "target_audience": (
+                request.POST.get("brief_target_audience")
+                or request.POST.get("target_audience")
+                or ""
+            ).strip(),
+            "budget": request.POST.get("budget", "").strip(),
+            "start_date": request.POST.get("start_date", "").strip(),
+            "end_date": request.POST.get("end_date", "").strip(),
+            "preferred_platform": request.POST.get(
+                "preferred_platform",
+                "",
+            ).strip(),
+            "additional_information": request.POST.get(
+                "additional_information",
+                "",
+            ).strip(),
+        }
+
+        if action in ("generate_strategy", "regenerate_strategy"):
+            if not form_values["company_id"]:
+                error = "Select a company before generating a strategy."
+            elif not form_values["marketing_goal"]:
+                error = "Describe the marketing goal before generating a strategy."
+            elif not form_values["target_audience"]:
+                error = "Describe the target audience before generating a strategy."
+            else:
+                company, product, product_error = _owned_strategy_company_product(
+                    request,
+                    form_values["company_id"],
+                    form_values["product_id"],
+                )
+                if product_error:
+                    error = product_error
+                else:
+                    start_date = _parse_optional_date(form_values["start_date"])
+                    end_date = _parse_optional_date(form_values["end_date"])
+                    if start_date is False or end_date is False:
+                        error = "Use valid start and end dates."
+                    elif start_date and end_date and end_date < start_date:
+                        error = "The end date cannot be before the start date."
+                    else:
+                        duration = "Not provided"
+                        if start_date and end_date:
+                            duration = (
+                                f"{start_date.isoformat()} to "
+                                f"{end_date.isoformat()} "
+                                f"({(end_date - start_date).days} days)"
+                            )
+                        elif start_date or end_date:
+                            duration = (
+                                (start_date or end_date).isoformat()
+                            )
+
+                        try:
+                            strategy = MarketingStrategyAgent().generate(
+                                {
+                                    "company_information": company_brief(company),
+                                    "product_information": product_brief(product),
+                                    "marketing_goal": form_values["marketing_goal"],
+                                    "target_audience": form_values["target_audience"],
+                                    "budget": form_values["budget"] or "Not provided",
+                                    "dates": duration,
+                                    "preferred_platform": form_values[
+                                        "preferred_platform"
+                                    ],
+                                    "additional_information": form_values[
+                                        "additional_information"
+                                    ],
+                                }
+                            )
+                            if form_values["preferred_platform"] and not strategy.get(
+                                "recommended_platform"
+                            ):
+                                strategy["recommended_platform"] = form_values[
+                                    "preferred_platform"
+                                ]
+                            if not strategy.get("target_audience"):
+                                strategy["target_audience"] = form_values[
+                                    "target_audience"
+                                ]
+                            save_draft(
+                                request,
+                                {
+                                    "form": form_values,
+                                    "strategy": strategy,
+                                },
+                            )
+                        except StrategyGenerationError as exc:
+                            error = str(exc)
+                            strategy = None
+                        except Exception:
+                            error = (
+                                "The strategy could not be generated. "
+                                "No campaign was created."
+                            )
+                            strategy = None
+
+        elif action == "create_campaign_from_strategy":
+            strategy = strategy_from_post(request.POST)
+            if not form_values["company_id"]:
+                error = "Select a company before creating a campaign."
+            elif not strategy.get("campaign_objective"):
+                error = (
+                    "Review and keep a campaign objective before creating "
+                    "the campaign."
+                )
+            else:
+                company, product, product_error = _owned_strategy_company_product(
+                    request,
+                    form_values["company_id"],
+                    form_values["product_id"],
+                )
+                if product_error:
+                    error = product_error
+                elif company.owner_id != request.user.id:
+                    error = "You cannot create a campaign for this company."
+                else:
+                    start_date = _parse_optional_date(form_values["start_date"])
+                    end_date = _parse_optional_date(form_values["end_date"])
+                    if start_date is False or end_date is False:
+                        error = "Use valid start and end dates."
+                    elif start_date and end_date and end_date < start_date:
+                        error = "The end date cannot be before the start date."
+                    else:
+                        budget_value = None
+                        if form_values["budget"]:
+                            try:
+                                budget_value = Decimal(form_values["budget"])
+                            except InvalidOperation:
+                                error = "Enter a valid budget amount."
+
+                        if not error:
+                            campaign = Campaign.objects.create(
+                                company=company,
+                                product=product,
+                                campaign_name=campaign_name_from_strategy(
+                                    strategy,
+                                    product,
+                                ),
+                                objective=strategy["campaign_objective"],
+                                platform=map_platform(
+                                    strategy.get("recommended_platform")
+                                    or form_values["preferred_platform"]
+                                ),
+                                budget=budget_value,
+                                start_date=start_date or None,
+                                end_date=end_date or None,
+                                status="Draft",
+                            )
+                            save_campaign_strategy(
+                                request,
+                                campaign.id,
+                                {
+                                    "form": form_values,
+                                    "strategy": strategy,
+                                },
+                            )
+                            content_url = reverse("ai_content_dashboard")
+                            return redirect(
+                                f"{content_url}?campaign={campaign.id}"
+                            )
+
+        else:
+            error = "Choose Generate Strategy or Create Campaign from Strategy."
+
+    return render(
+        request,
+        "dashboard/strategy_planner.html",
+        {
+            "companies": companies,
+            "products": products,
+            "form_values": form_values,
+            "strategy": strategy,
+            "error": error,
+            "unmapped_fields": unmapped_fields,
+            "platforms": [
+                value for value, _label in Campaign._meta.get_field(
+                    "platform"
+                ).choices
+            ],
+            "workflow_campaign_id": workflow_campaign_id(request),
+        },
     )
 
 
@@ -757,6 +1079,7 @@ def campaign_edit(
         id=campaign_id,
         company__owner=request.user
     )
+    remember_workflow_campaign(request, campaign.id)
 
     workspace_id = workspace_id_from_request(request)
     workspace = workspace_context(
@@ -799,15 +1122,9 @@ def campaign_edit(
 
                 updated_campaign.save()
 
-                messages.success(
+                return _continue_to_content_studio(
                     request,
-                    "Campaign updated successfully."
-                )
-
-                return redirect_company_scope(
-                    request,
-                    "campaigns_dashboard",
-                    "company_campaigns_dashboard",
+                    updated_campaign,
                 )
 
     else:
@@ -825,7 +1142,7 @@ def campaign_edit(
             "form": form,
             "campaign": campaign,
             "page_title": "Edit Campaign",
-            "button_text": "Save Changes",
+            "button_text": "Save and generate",
         }
     )
 
@@ -856,11 +1173,6 @@ def campaign_delete(
 
         campaign.delete()
 
-        messages.success(
-            request,
-            f"{campaign_name} deleted successfully."
-        )
-
     return redirect_company_scope(
         request,
         "campaigns_dashboard",
@@ -872,6 +1184,119 @@ def campaign_delete(
 # CAMPAIGN ANALYTICS
 # ==========================================================
 
+def _social_session_get(request, bucket, campaign_id, default=None):
+    stored = request.session.get(bucket) or {}
+    return stored.get(str(campaign_id), default)
+
+
+def _social_session_set(request, bucket, campaign_id, value):
+    stored = request.session.get(bucket) or {}
+    stored[str(campaign_id)] = value
+    request.session[bucket] = stored
+    request.session.modified = True
+
+
+def _campaign_analytics_context(
+    request,
+    campaign,
+    advisor_result=None,
+    advisor_error=None,
+    social_error=None,
+):
+    analytics_service = AnalyticsService()
+    result = analytics_service.get_campaign_analytics(campaign)
+    chart_files = []
+    for chart in result["charts"]:
+        chart_files.append(os.path.basename(chart))
+    result["charts"] = chart_files
+
+    importer = SocialPerformanceImporter()
+    fetch_state = _social_session_get(
+        request,
+        "social_fetch_posts",
+        campaign.id,
+        {},
+    ) or {}
+    imported_ids = _social_session_get(
+        request,
+        "social_imported_ids",
+        campaign.id,
+        [],
+    ) or []
+    live_verified = bool(
+        _social_session_get(
+            request,
+            "social_live_verified",
+            campaign.id,
+            False,
+        )
+    )
+    notice = _social_session_get(
+        request,
+        "social_import_notice",
+        campaign.id,
+        "",
+    ) or ""
+    if notice:
+        _social_session_set(
+            request,
+            "social_import_notice",
+            campaign.id,
+            "",
+        )
+
+    posts = fetch_state.get("posts") or []
+    imported_keys = importer.already_imported_keys(campaign)
+    for post in posts:
+        platform_label = importer.display_platform(post.get("platform"))
+        post_id = str(post.get("external_post_id") or "")
+        post["already_imported"] = (platform_label, post_id) in imported_keys
+        post["selection_value"] = (
+            f"{str(post.get('platform') or '').lower()}:{post_id}"
+        )
+
+    performances = list(campaign.performance.all())
+    intelligence_service = CampaignIntelligence()
+    intelligence = intelligence_service.build(
+        campaign,
+        result.get("summary") or {},
+        performances,
+    )
+    strategy = (load_campaign_strategy(request, campaign.id) or {}).get(
+        "strategy"
+    )
+    strategy_outcome = intelligence_service.strategy_vs_outcome(
+        strategy,
+        result.get("summary") or {},
+        intelligence.get("diagnosis") or {},
+    )
+    voice = CustomerVoiceAnalyzer().analyze(
+        campaign.company,
+        campaign=campaign,
+        use_ai=False,
+    )
+    combined = intelligence_service.combined_context(campaign, voice)
+
+    return {
+        "campaign": campaign,
+        "analytics": result,
+        "intelligence": intelligence,
+        "strategy_outcome": strategy_outcome,
+        "voice_context": combined,
+        "advisor_result": advisor_result,
+        "advisor_error": advisor_error,
+        "social_posts": posts,
+        "social_source": fetch_state.get("source"),
+        "social_error": social_error or fetch_state.get("display_error"),
+        "social_notice": notice,
+        "social_platforms": fetch_state.get("platforms") or "both",
+        "social_connection": importer.connection_status(
+            live_verified=live_verified,
+        ),
+        "social_imported_count": len(imported_ids),
+    }
+
+
 @marketing_specialist_required
 def campaign_analytics_dashboard(
     request,
@@ -879,61 +1304,168 @@ def campaign_analytics_dashboard(
 ):
 
     campaign = get_object_or_404(
-    Campaign,
-    id=campaign_id,
-    company__owner=request.user
+        Campaign,
+        id=campaign_id,
+        company__owner=request.user
     )
-
-    analytics_service = (
-        AnalyticsService()
-    )
-
-    result = (
-        analytics_service
-        .get_campaign_analytics(
-            campaign
-        )
-    )
-
-    chart_files = []
-
-    for chart in result["charts"]:
-
-        chart_files.append(
-            os.path.basename(chart)
-        )
-
-    result["charts"] = (
-        chart_files
-    )
+    remember_workflow_campaign(request, campaign.id)
 
     advisor_result = None
     advisor_error = None
+    social_error = None
 
-    if (
-        request.method == "POST"
-        and request.POST.get("action") == "generate_ai_recommendations"
-    ):
-        try:
-            advisor_result = CampaignAdvisor().generate(
+    if request.method == "POST":
+        action = request.POST.get("action")
+        importer = SocialPerformanceImporter()
+
+        if action == "fetch_social_posts":
+            platforms = request.POST.get("social_platforms") or "both"
+            result = importer.fetch_posts(platforms, campaign)
+            fetch_state = {
+                "source": result.get("source"),
+                "posts": result.get("posts") or [],
+                "platforms": platforms,
+                "display_error": result.get("error"),
+            }
+            _social_session_set(
+                request,
+                "social_fetch_posts",
+                campaign.id,
+                fetch_state,
+            )
+            if result.get("source") == "live" and result.get("posts"):
+                _social_session_set(
+                    request,
+                    "social_live_verified",
+                    campaign.id,
+                    True,
+                )
+            return redirect(
+                "campaign_analytics_dashboard",
+                campaign_id=campaign.id,
+            )
+
+        if action == "import_social_performance":
+            fetch_state = _social_session_get(
+                request,
+                "social_fetch_posts",
+                campaign.id,
+                {},
+            ) or {}
+            posts = fetch_state.get("posts") or []
+            selected_ids = request.POST.getlist("social_post_id")
+            already = _social_session_get(
+                request,
+                "social_imported_ids",
+                campaign.id,
+                [],
+            ) or []
+            outcome = importer.import_selected(
                 campaign,
-                result.get("summary") or {},
+                posts,
+                selected_ids,
             )
-        except Exception:
-            advisor_error = (
-                "AI recommendations could not be generated. "
-                "Campaign analytics are still available."
+            if outcome.get("error"):
+                social_error = outcome["error"]
+            else:
+                imported = list(already) + list(outcome.get("imported_ids") or [])
+                _social_session_set(
+                    request,
+                    "social_imported_ids",
+                    campaign.id,
+                    imported,
+                )
+                count = outcome.get("imported") or 0
+                notice = (
+                    f"{count} social post"
+                    f"{'s' if count != 1 else ''} "
+                    "were imported into campaign performance."
+                )
+                if outcome.get("skipped_duplicate"):
+                    notice += (
+                        f" {outcome['skipped_duplicate']} selected post(s) "
+                        "were skipped because they were already imported."
+                    )
+                _social_session_set(
+                    request,
+                    "social_import_notice",
+                    campaign.id,
+                    notice,
+                )
+                return redirect(
+                    "campaign_analytics_dashboard",
+                    campaign_id=campaign.id,
+                )
+
+        if action == "generate_ai_recommendations":
+            analytics_preview = AnalyticsService().get_campaign_analytics(
+                campaign
             )
+            imported_ids = _social_session_get(
+                request,
+                "social_imported_ids",
+                campaign.id,
+                [],
+            ) or []
+            strategy = (
+                load_campaign_strategy(request, campaign.id) or {}
+            ).get("strategy")
+            extra = strategy_context_for_advisor(strategy) or {}
+            if imported_ids:
+                extra["performance_source_note"] = (
+                    "Some performance records were imported from "
+                    "selected social posts. Do not infer conversions "
+                    "or revenue from engagement."
+                )
+            performances = list(campaign.performance.all())
+            intelligence = CampaignIntelligence().build(
+                campaign,
+                analytics_preview.get("summary") or {},
+                performances,
+            )
+            voice = CustomerVoiceAnalyzer().analyze(
+                campaign.company,
+                campaign=campaign,
+                use_ai=False,
+            )
+            voice_payload = None
+            if not voice.get("empty"):
+                voice_payload = {
+                    "topics": voice.get("topics"),
+                    "sentiment": voice.get("sentiment"),
+                    "concerns": voice.get("concerns"),
+                    "questions": voice.get("questions"),
+                    "filtered_to_campaign_dates": voice.get(
+                        "filtered_to_campaign_dates"
+                    ),
+                    "customer_message_count": voice.get(
+                        "customer_message_count"
+                    ),
+                }
+            try:
+                advisor_result = CampaignAdvisor().generate(
+                    campaign,
+                    analytics_preview.get("summary") or {},
+                    strategy_context=extra or None,
+                    intelligence=intelligence,
+                    customer_voice=voice_payload,
+                )
+            except Exception:
+                advisor_error = (
+                    "AI recommendations could not be generated. "
+                    "Campaign analytics are still available."
+                )
 
     return render(
         request,
         "dashboard/campaign_analytics.html",
-        {
-            "campaign": campaign,
-            "analytics": result,
-            "advisor_result": advisor_result,
-            "advisor_error": advisor_error,
-        }
+        _campaign_analytics_context(
+            request,
+            campaign,
+            advisor_result=advisor_result,
+            advisor_error=advisor_error,
+            social_error=social_error,
+        ),
     )
 
 
@@ -1011,44 +1543,76 @@ def ai_content_dashboard(request, company_id=None):
         "additional": "",
     }
 
+    if request.method == "GET":
+        query_campaign = request.GET.get("campaign")
+        session_campaign = workflow_campaign_id(request)
+        campaign_id = query_campaign or session_campaign
+        if campaign_id:
+            if query_campaign:
+                selected_campaign = get_object_or_404(
+                    Campaign,
+                    id=campaign_id,
+                    company__owner=request.user,
+                )
+            else:
+                selected_campaign = campaigns.filter(id=campaign_id).first()
+            if selected_campaign:
+                remember_workflow_campaign(request, selected_campaign.id)
+                saved_brief = load_creative_brief(
+                    request,
+                    selected_campaign.id,
+                )
+                stored = load_campaign_strategy(
+                    request,
+                    selected_campaign.id,
+                )
+                if saved_brief:
+                    creative_brief = saved_brief
+                elif stored and stored.get("strategy"):
+                    creative_brief = brief_from_strategy(stored["strategy"])
+                generated_suggestions = _latest_studio_suggestions(
+                    selected_campaign
+                )
+
     if request.method == "POST":
 
         action = request.POST.get("action", "generate")
+
+        if action == "save_studio_state":
+            campaign_id = request.POST.get("campaign_id")
+            creative_brief = _brief_from_post(request.POST)
+            if campaign_id:
+                selected_campaign = get_object_or_404(
+                    Campaign,
+                    id=campaign_id,
+                    company__owner=request.user,
+                )
+                save_creative_brief(
+                    request,
+                    selected_campaign.id,
+                    creative_brief,
+                )
+                generated_suggestions = _latest_studio_suggestions(
+                    selected_campaign
+                )
+            next_url = _safe_dashboard_next(request.POST.get("next"))
+            if next_url:
+                return redirect(next_url)
+            if selected_campaign:
+                return redirect(
+                    _content_studio_url(
+                        request,
+                        selected_campaign,
+                        "generate",
+                    )
+                )
+            return redirect("ai_content_dashboard")
 
         if action == "generate":
 
             campaign_id = request.POST.get("campaign_id")
 
-            creative_brief = {
-                "focus": request.POST.get(
-                    "creative_focus",
-                    ""
-                ).strip(),
-                "style": request.POST.get(
-                    "creative_style",
-                    "Premium Product Ad"
-                ).strip(),
-                "colors": request.POST.get(
-                    "creative_colors",
-                    ""
-                ).strip(),
-                "background": request.POST.get(
-                    "creative_background",
-                    ""
-                ).strip(),
-                "composition": request.POST.get(
-                    "creative_composition",
-                    "Product Centered"
-                ).strip(),
-                "mood": request.POST.get(
-                    "creative_mood",
-                    ""
-                ).strip(),
-                "additional": request.POST.get(
-                    "creative_additional",
-                    ""
-                ).strip(),
-            }
+            creative_brief = _brief_from_post(request.POST)
 
             if not campaign_id:
                 error = "Please select a campaign."
@@ -1064,6 +1628,12 @@ def ai_content_dashboard(request, company_id=None):
                     id=campaign_id,
                     company__owner=request.user
                 )
+                save_creative_brief(
+                    request,
+                    selected_campaign.id,
+                    creative_brief,
+                )
+                remember_workflow_campaign(request, selected_campaign.id)
 
                 try:
                     generator = ContentGenerator()
@@ -1173,6 +1743,7 @@ def ai_content_dashboard(request, company_id=None):
                                         saved_content,
                                         creative_brief=creative_brief,
                                     )
+                                    saved_content.refresh_from_db()
 
                                 except Exception as poster_error:
                                     poster_failures.append(
@@ -1192,18 +1763,9 @@ def ai_content_dashboard(request, company_id=None):
                             if poster_failures:
                                 messages.warning(
                                     request,
-                                    "The text suggestions were saved, "
-                                    "but one or more posters could not "
-                                    "be generated. "
-                                    + " | ".join(poster_failures)
-                                )
-
-                            else:
-                                messages.success(
-                                    request,
-                                    "3 AI suggestions and matching "
-                                    "creative-brief posters were generated, "
-                                    "validated and saved successfully."
+                                    "The posters could not be prepared "
+                                    "for every suggestion. The written "
+                                    "suggestions are still saved."
                                 )
 
                 except Exception as e:
@@ -1245,11 +1807,6 @@ def ai_content_dashboard(request, company_id=None):
                     ]
                 )
 
-                messages.success(
-                    request,
-                    "Suggestion updated successfully."
-                )
-
         elif action == "select":
 
             content_id = request.POST.get(
@@ -1277,11 +1834,6 @@ def ai_content_dashboard(request, company_id=None):
                 update_fields=[
                     "is_selected"
                 ]
-            )
-
-            messages.success(
-                request,
-                "Suggestion selected successfully."
             )
 
         elif action == "publish_instagram":
@@ -1324,11 +1876,6 @@ def ai_content_dashboard(request, company_id=None):
                         campaign_content
                     )
                     campaign_content.refresh_from_db()
-                    messages.success(
-                        request,
-                        "The selected content was published "
-                        "to Instagram."
-                    )
 
                 except InstagramConfigError:
                     messages.info(
@@ -1357,22 +1904,62 @@ def ai_content_dashboard(request, company_id=None):
                 "publish_instagram",
             ]
         ):
-            latest_contents = list(
-                CampaignContent.objects.filter(
-                    campaign=selected_campaign,
-                    ai_generated=True,
-                    language="Arabic"
-                ).order_by(
-                    "-created_at"
-                )[:3]
+            remember_workflow_campaign(request, selected_campaign.id)
+            saved_brief = load_creative_brief(
+                request,
+                selected_campaign.id,
+            )
+            if saved_brief:
+                creative_brief = saved_brief
+            generated_suggestions = _latest_studio_suggestions(
+                selected_campaign
             )
 
-            latest_contents.reverse()
+    requested_stage = (
+        request.GET.get("stage")
+        or request.POST.get("stage")
+        or ""
+    ).strip()
+    if requested_stage not in ("generate", "review"):
+        requested_stage = None
 
-            generated_suggestions = [
-                _suggestion_payload(item)
-                for item in latest_contents
-            ]
+    if (
+        request.method == "POST"
+        and generated_suggestions
+        and request.POST.get("action", "generate") == "generate"
+        and not error
+    ):
+        workflow_step = "review"
+    elif requested_stage:
+        workflow_step = requested_stage
+    elif generated_suggestions:
+        workflow_step = "review"
+    else:
+        workflow_step = "generate"
+
+    studio_back_url = reverse("marketing_strategy_planner")
+    studio_next_url = reverse("reports_dashboard")
+    if selected_campaign:
+        if workflow_step == "review":
+            studio_back_url = _content_studio_url(
+                request,
+                selected_campaign,
+                "generate",
+            )
+            studio_next_url = reverse(
+                "campaign_analytics_dashboard",
+                args=[selected_campaign.id],
+            )
+        else:
+            studio_back_url = reverse(
+                "campaign_edit",
+                args=[selected_campaign.id],
+            )
+            studio_next_url = _content_studio_url(
+                request,
+                selected_campaign,
+                "review",
+            )
 
     return render(
         request,
@@ -1384,6 +1971,13 @@ def ai_content_dashboard(request, company_id=None):
             "creative_brief": creative_brief,
             "error": error,
             "instagram_configured": _instagram_is_configured(),
+            "has_selected_content": any(
+                item.get("is_selected")
+                for item in generated_suggestions
+            ),
+            "studio_back_url": studio_back_url,
+            "studio_next_url": studio_next_url,
+            "workflow_step": workflow_step,
             **workspace,
         }
     )
@@ -1403,9 +1997,15 @@ def customer_support_dashboard(request, company_id=None):
     selected_company = None
     conversations = []
     support_analytics = None
+    customer_voice = None
+    voice_error = None
     error = None
 
-    selected_id = company_id or request.GET.get("company")
+    selected_id = (
+        company_id
+        or request.POST.get("company")
+        or request.GET.get("company")
+    )
 
     workspace = workspace_context(
         request,
@@ -1442,6 +2042,26 @@ def customer_support_dashboard(request, company_id=None):
 
             error = str(e)
 
+        customer_voice = CustomerVoiceAnalyzer().analyze(
+            selected_company,
+            use_ai=False,
+        )
+
+        if request.method == "POST" and request.POST.get("action") == (
+            "analyze_customer_voice"
+        ):
+            try:
+                customer_voice = CustomerVoiceAnalyzer().analyze(
+                    selected_company,
+                    use_ai=True,
+                    include_knowledge_gaps=True,
+                )
+            except Exception:
+                voice_error = (
+                    "Customer Voice analysis could not be completed. "
+                    "Deterministic analytics are still available."
+                )
+
     knowledge_count = 0
     conversation_count = 0
     rag_indexed = False
@@ -1466,6 +2086,8 @@ def customer_support_dashboard(request, company_id=None):
             "selected_company": selected_company,
             "conversations": conversations,
             "support_analytics": support_analytics,
+            "customer_voice": customer_voice,
+            "voice_error": voice_error,
             "error": error,
             "knowledge_count": knowledge_count,
             "conversation_count": conversation_count,
@@ -1537,6 +2159,8 @@ def reports_dashboard(request, company_id=None):
         except Exception as e:
 
             error = str(e)
+
+        remember_workflow_campaign(request, selected_campaign.id)
 
     return render(
         request,
@@ -1646,11 +2270,6 @@ def knowledge_document_create(request):
                         request,
                         "Document saved, but AI indexing failed."
                     )
-                else:
-                    messages.success(
-                        request,
-                        "Document successfully indexed for AI retrieval."
-                    )
 
                 return redirect_company_scope(
                     request,
@@ -1745,11 +2364,6 @@ def knowledge_document_edit(
                         request,
                         "Document saved, but AI indexing failed."
                     )
-                else:
-                    messages.success(
-                        request,
-                        "Document successfully indexed for AI retrieval."
-                    )
 
                 return redirect_company_scope(
                     request,
@@ -1800,11 +2414,6 @@ def knowledge_document_delete(
         title = document.title
 
         document.delete()
-
-        messages.success(
-            request,
-            f"{title} deleted successfully."
-        )
 
     return redirect_company_scope(
         request,

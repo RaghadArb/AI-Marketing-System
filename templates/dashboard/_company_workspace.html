@@ -1,146 +1,11 @@
 {% if workspace_company %}
-<style>
-    body.has-company-workspace .workspace-sidebar {
-        height: 100vh;
-        background: #172033;
-        color: white;
-        position: fixed;
-        width: 250px;
-        left: 0;
-        top: 0;
-        padding: 25px 15px;
-        z-index: 1000;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-    }
-
-    body.has-company-workspace .workspace-sidebar-nav {
-        flex: 1;
-        min-height: 0;
-        overflow-y: auto;
-        overflow-x: hidden;
-        padding-bottom: 8px;
-    }
-
-    body.has-company-workspace .workspace-brand {
-        font-size: 22px;
-        font-weight: bold;
-        padding: 10px 15px 30px;
-        flex-shrink: 0;
-    }
-
-    body.has-company-workspace .workspace-brand span {
-        color: #4f9cf9;
-    }
-
-    body.has-company-workspace .workspace-sidebar .nav-link {
-        color: #b9c3d4;
-        padding: 13px 15px;
-        border-radius: 8px;
-        margin-bottom: 5px;
-        text-decoration: none;
-        display: block;
-        transition: 0.2s;
-    }
-
-    body.has-company-workspace .workspace-sidebar .nav-link:hover,
-    body.has-company-workspace .workspace-sidebar .nav-link.active {
-        background: #273754;
-        color: white;
-    }
-
-    body.has-company-workspace .workspace-logout {
-        position: relative;
-        flex-shrink: 0;
-        padding-top: 15px;
-        background: #172033;
-    }
-
-    body.has-company-workspace .workspace-shell {
-        margin-left: 250px;
-        padding: 20px 30px 0;
-    }
-
-    body.has-company-workspace .container {
-        max-width: none;
-        width: auto;
-        margin-left: 250px;
-        padding-top: 12px;
-        padding-right: 30px;
-        padding-left: 30px;
-    }
-
-    body.has-company-workspace .workspace-tabs {
-        background: white;
-        border-radius: 12px;
-        padding: 16px 18px 10px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
-        margin-bottom: 18px;
-    }
-
-    body.has-company-workspace .workspace-tabs .nav-link {
-        color: #4b5568;
-        border: none;
-        border-bottom: 2px solid transparent;
-        border-radius: 0;
-        margin-bottom: 0;
-        padding: 8px 12px;
-    }
-
-    body.has-company-workspace .workspace-tabs .nav-link.active {
-        background: transparent;
-        color: #0d6efd;
-        border-bottom-color: #0d6efd;
-    }
-
-    @media (max-width: 900px) {
-        body.has-company-workspace .workspace-sidebar {
-            position: relative;
-            width: 100%;
-            height: auto;
-            min-height: auto;
-            overflow: visible;
-        }
-
-        body.has-company-workspace .workspace-shell,
-        body.has-company-workspace .container {
-            margin-left: 0;
-            padding-left: 16px;
-            padding-right: 16px;
-        }
-    }
-</style>
-
-<div class="workspace-sidebar">
-    <div class="workspace-brand">
-        AI <span>Marketing</span>
-    </div>
-
-    <nav class="workspace-sidebar-nav">
-        <a href="{% url 'dashboard_home' %}" class="nav-link">🏠 Dashboard</a>
-        <a href="{% url 'companies_dashboard' %}" class="nav-link active">🏢 Companies</a>
-        <a href="{% url 'products_dashboard' %}" class="nav-link">📦 Products</a>
-        <a href="{% url 'campaigns_dashboard' %}" class="nav-link">📢 Campaigns</a>
-        <a href="{% url 'ai_content_dashboard' %}" class="nav-link">🤖 AI Content</a>
-        <a href="{% url 'campaigns_dashboard' %}" class="nav-link">📊 Analytics</a>
-        <a href="{% url 'customer_support_dashboard' %}" class="nav-link">💬 Customer Support Agent</a>
-        <a href="{% url 'customer_support_dashboard' %}#support-analytics" class="nav-link">📈 Support Analytics</a>
-        <a href="{% url 'reports_dashboard' %}" class="nav-link">📄 Reports</a>
-        <a href="{% url 'knowledge_base_dashboard' %}" class="nav-link">🧠 Knowledge Base</a>
-    </nav>
-
-    <div class="workspace-logout">
-        <a href="{% url 'logout' %}" class="btn btn-outline-light w-100">Logout</a>
-    </div>
-</div>
-
-<div class="workspace-shell">
-    <div class="workspace-tabs">
+{% include "dashboard/_sidebar.html" with active=workspace_tab|default:'companies' %}
+<div class="workspace-shell px-0">
+    <div class="workspace-tabs ex-card mb-4 p-3">
         <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-3">
             <div>
-                <div class="text-muted small">Company dashboard</div>
-                <h5 class="mb-0">{{ workspace_company.company_name }}</h5>
+                <div class="ex-kicker">Company workspace</div>
+                <h5 class="mb-0 ex-serif">{{ workspace_company.company_name }}</h5>
             </div>
             <div style="min-width: 240px;">
                 <label class="form-label small mb-1">Switch company</label>
@@ -159,49 +24,27 @@
                 </select>
             </div>
         </div>
-
         <ul class="nav">
             <li class="nav-item">
-                <a
-                    class="nav-link {% if workspace_tab == 'overview' %}active{% endif %}"
-                    href="{% url 'company_workspace' workspace_company.id %}"
-                >Overview</a>
+                <a class="nav-link {% if workspace_tab == 'overview' %}active{% endif %}" href="{% url 'company_workspace' workspace_company.id %}">Overview</a>
             </li>
             <li class="nav-item">
-                <a
-                    class="nav-link {% if workspace_tab == 'products' %}active{% endif %}"
-                    href="{% url 'company_products_dashboard' workspace_company.id %}"
-                >Products</a>
+                <a class="nav-link {% if workspace_tab == 'products' %}active{% endif %}" href="{% url 'company_products_dashboard' workspace_company.id %}">Products</a>
             </li>
             <li class="nav-item">
-                <a
-                    class="nav-link {% if workspace_tab == 'campaigns' %}active{% endif %}"
-                    href="{% url 'company_campaigns_dashboard' workspace_company.id %}"
-                >Campaigns</a>
+                <a class="nav-link {% if workspace_tab == 'campaigns' %}active{% endif %}" href="{% url 'company_campaigns_dashboard' workspace_company.id %}">Campaigns</a>
             </li>
             <li class="nav-item">
-                <a
-                    class="nav-link {% if workspace_tab == 'ai_content' %}active{% endif %}"
-                    href="{% url 'company_ai_content_dashboard' workspace_company.id %}"
-                >AI Content</a>
+                <a class="nav-link {% if workspace_tab == 'ai_content' %}active{% endif %}" href="{% url 'company_ai_content_dashboard' workspace_company.id %}">Content Studio</a>
             </li>
             <li class="nav-item">
-                <a
-                    class="nav-link {% if workspace_tab == 'support' %}active{% endif %}"
-                    href="{% url 'company_support_dashboard' workspace_company.id %}"
-                >Customer Support</a>
+                <a class="nav-link {% if workspace_tab == 'support' %}active{% endif %}" href="{% url 'company_support_dashboard' workspace_company.id %}">Support</a>
             </li>
             <li class="nav-item">
-                <a
-                    class="nav-link {% if workspace_tab == 'knowledge' %}active{% endif %}"
-                    href="{% url 'company_knowledge_dashboard' workspace_company.id %}"
-                >Knowledge Base</a>
+                <a class="nav-link {% if workspace_tab == 'knowledge' %}active{% endif %}" href="{% url 'company_knowledge_dashboard' workspace_company.id %}">Knowledge</a>
             </li>
             <li class="nav-item">
-                <a
-                    class="nav-link {% if workspace_tab == 'reports' %}active{% endif %}"
-                    href="{% url 'company_reports_dashboard' workspace_company.id %}"
-                >Reports</a>
+                <a class="nav-link {% if workspace_tab == 'reports' %}active{% endif %}" href="{% url 'company_reports_dashboard' workspace_company.id %}">Reports</a>
             </li>
         </ul>
     </div>

@@ -1,387 +1,40 @@
 <!DOCTYPE html>
-
 <html lang="en">
-
 {% load campaign_ui %}
-
 <head>
-
-    <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1"
-    >
-
-    <title>AI Marketing Platform</title>
-
-    <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-        rel="stylesheet"
-    >
-
-    <style>
-
-        body {
-            background: #f4f7fb;
-            font-family: Arial, sans-serif;
-        }
-
-        .sidebar {
-            height: 100vh;
-            background: #172033;
-            color: white;
-            position: fixed;
-            width: 250px;
-            left: 0;
-            top: 0;
-            padding: 25px 15px;
-            z-index: 1000;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .sidebar-nav {
-            flex: 1;
-            min-height: 0;
-            overflow-y: auto;
-            overflow-x: hidden;
-            padding-bottom: 8px;
-        }
-
-        .brand {
-            font-size: 22px;
-            font-weight: bold;
-            padding: 10px 15px 30px;
-            flex-shrink: 0;
-        }
-
-        .brand span {
-            color: #4f9cf9;
-        }
-
-        .nav-link {
-            color: #b9c3d4;
-            padding: 13px 15px;
-            border-radius: 8px;
-            margin-bottom: 5px;
-            text-decoration: none;
-            transition: 0.2s;
-        }
-
-        .nav-link:hover,
-        .nav-link.active {
-            background: #273754;
-            color: white;
-        }
-
-        .logout {
-            position: relative;
-            flex-shrink: 0;
-            padding-top: 15px;
-            background: #172033;
-        }
-
-        .main {
-            margin-left: 250px;
-            padding: 30px;
-        }
-
-        .topbar {
-            background: white;
-            border-radius: 12px;
-            padding: 18px 25px;
-            margin-bottom: 25px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
-        }
-
-        .user-role {
-            color: #6c757d;
-            font-size: 13px;
-        }
-
-        .stat-card {
-            background: white;
-            border: none;
-            border-radius: 14px;
-            padding: 22px;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
-            height: 100%;
-        }
-
-        .stat-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 22px;
-            margin-bottom: 15px;
-        }
-
-        .blue {
-            background: #e8f1ff;
-        }
-
-        .purple {
-            background: #f0eaff;
-        }
-
-        .green {
-            background: #e6f7ef;
-        }
-
-        .orange {
-            background: #fff1df;
-        }
-
-        .stat-value {
-            font-size: 28px;
-            font-weight: bold;
-            margin-bottom: 4px;
-        }
-
-        .quick-action {
-            background: white;
-            border: none;
-            border-radius: 14px;
-            padding: 18px 16px;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
-            height: 100%;
-            text-decoration: none;
-            color: inherit;
-            display: block;
-            transition: 0.2s;
-        }
-
-        .quick-action:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 5px 18px rgba(0, 0, 0, 0.08);
-            color: inherit;
-        }
-
-        .feature-card {
-            background: white;
-            border: none;
-            border-radius: 14px;
-            padding: 25px;
-            height: 100%;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
-            transition: 0.2s;
-            position: relative;
-        }
-
-        .feature-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 5px 18px rgba(0, 0, 0, 0.08);
-        }
-
-        .feature-card h5 {
-            font-weight: bold;
-            padding-right: 70px;
-        }
-
-        .feature-card p {
-            color: #6c757d;
-            font-size: 14px;
-            min-height: 65px;
-        }
-
-        .section-title {
-            font-weight: bold;
-            margin-bottom: 18px;
-        }
-
-        .status-badge {
-            position: absolute;
-            top: 18px;
-            right: 18px;
-            font-size: 11px;
-        }
-
-        .panel-card {
-            background: white;
-            border-radius: 14px;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
-            overflow: hidden;
-        }
-
-        .platform-badge {
-            background: #e8f1ff;
-            color: #0d6efd;
-            border-radius: 20px;
-            padding: 6px 10px;
-            font-size: 12px;
-        }
-
-        @media (max-width: 900px) {
-
-            .sidebar {
-                position: relative;
-                width: 100%;
-                height: auto;
-                min-height: auto;
-                overflow: visible;
-            }
-
-            .sidebar-nav {
-                overflow: visible;
-            }
-
-            .logout {
-                position: relative;
-                margin-top: 20px;
-                padding-bottom: 15px;
-            }
-
-            .main {
-                margin-left: 0;
-            }
-
-        }
-
-    </style>
-
+    {% include "dashboard/_assets.html" with page_title="Marketing Overview" %}
 </head>
+<body class="ex-app">
+{% include "dashboard/_sidebar.html" with active="home" %}
 
-<body>
+<div class="ex-main">
 
-<div class="sidebar">
-
-    <div class="brand">
-        AI <span>Marketing</span>
-    </div>
-
-    <nav class="sidebar-nav">
-
-        <a
-            href="{% url 'dashboard_home' %}"
-            class="nav-link active"
-        >
-            🏠 Dashboard
-        </a>
-
-        <a
-            href="{% url 'companies_dashboard' %}"
-            class="nav-link"
-        >
-            🏢 Companies
-        </a>
-
-        <a
-            href="{% url 'products_dashboard' %}"
-            class="nav-link"
-        >
-            📦 Products
-        </a>
-
-        <a
-            href="{% url 'campaigns_dashboard' %}"
-            class="nav-link"
-        >
-            📢 Campaigns
-        </a>
-
-        <a
-            href="{% url 'ai_content_dashboard' %}"
-            class="nav-link"
-        >
-            🤖 AI Content
-        </a>
-
-        <a
-            href="{% url 'campaigns_dashboard' %}"
-            class="nav-link"
-        >
-            📊 Analytics
-        </a>
-
-        <a
-            href="{% url 'customer_support_dashboard' %}"
-            class="nav-link"
-        >
-            💬 Customer Support Agent
-        </a>
-
-        <a
-            href="{% url 'customer_support_dashboard' %}#support-analytics"
-            class="nav-link"
-        >
-            📈 Support Analytics
-        </a>
-
-        <a
-            href="{% url 'reports_dashboard' %}"
-            class="nav-link"
-        >
-            📄 Reports
-        </a>
-
-        <a
-            href="{% url 'knowledge_base_dashboard' %}"
-            class="nav-link"
-        >
-            🧠 Knowledge Base
-        </a>
-
-    </nav>
-
-    <div class="logout">
-
-        <a
-            href="{% url 'logout' %}"
-            class="btn btn-outline-light w-100"
-        >
-            Logout
-        </a>
-
-    </div>
-
-</div>
-
-<div class="main">
-
-    <div class="topbar d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
-
+    <div class="ex-page-header">
         <div>
-
-            <h4 class="mb-1">
-                Marketing Overview
-            </h4>
-
-            <span class="user-role">
-                Monitor campaigns, AI content, customer engagement and performance.
-            </span>
-
+            <div class="ex-kicker">Executive dashboard</div>
+            <h2>Marketing Overview</h2>
+            <p class="mb-0 opacity-75">
+                Monitor campaigns, content, customer engagement and performance.
+            </p>
         </div>
-
         <div class="text-sm-end">
-
-            <strong>
-                {{ request.user.username }}
-            </strong>
-
-            <div class="user-role">
-                Marketing Specialist
-            </div>
-
+            <strong>{{ request.user.username }}</strong>
+            <div class="small opacity-75">Marketing Specialist</div>
         </div>
-
     </div>
 
-    <div class="mb-4">
-
-        <h2>
-            Welcome back, {{ request.user.username }}
-        </h2>
-
-        <p class="text-muted mb-0">
-            Monitor campaigns, AI content, customer engagement and performance
-            from one executive view.
-        </p>
-
+    <div class="row g-3 mb-4">
+        <div class="col-md-6 col-xl-4">
+            <a href="{% url 'marketing_strategy_planner' %}" class="quick-action">
+                <div class="ex-icon-wrap">
+                    <svg viewBox="0 0 24 24"><use href="#i-trend"/></svg>
+                </div>
+                <div class="fw-bold mb-1">AI Strategy Planner</div>
+                <div class="text-muted small">
+                    Turn a marketing goal into an AI-assisted campaign strategy.
+                </div>
+            </a>
+        </div>
     </div>
 
     {% if companies %}
@@ -412,8 +65,8 @@
 
             <div class="stat-card">
 
-                <div class="stat-icon blue">
-                    🏢
+                <div class="stat-icon">
+                    <svg viewBox="0 0 24 24"><use href="#i-building"/></svg>
                 </div>
 
                 <div class="stat-value">
@@ -436,8 +89,8 @@
 
             <div class="stat-card">
 
-                <div class="stat-icon purple">
-                    📢
+                <div class="stat-icon">
+                    <svg viewBox="0 0 24 24"><use href="#i-megaphone"/></svg>
                 </div>
 
                 <div class="stat-value">
@@ -460,8 +113,8 @@
 
             <div class="stat-card">
 
-                <div class="stat-icon green">
-                    🤖
+                <div class="stat-icon">
+                    <svg viewBox="0 0 24 24"><use href="#i-spark"/></svg>
                 </div>
 
                 <div class="stat-value">
@@ -484,8 +137,8 @@
 
             <div class="stat-card">
 
-                <div class="stat-icon orange">
-                    💬
+                <div class="stat-icon">
+                    <svg viewBox="0 0 24 24"><use href="#i-chat"/></svg>
                 </div>
 
                 <div class="stat-value">
@@ -732,12 +385,46 @@
 
             <div class="feature-card">
 
-                <span class="badge bg-success status-badge">
+                <span class="badge status-badge">
                     Available
                 </span>
+                <div class="ex-icon-wrap">
+                    <svg viewBox="0 0 24 24"><use href="#i-trend"/></svg>
+                </div>
 
                 <h5>
-                    💬 Customer Support Agent
+                    AI Strategy Planner
+                </h5>
+
+                <p>
+                    Turn a marketing goal into an AI-assisted campaign strategy,
+                    then approve a draft campaign before content is generated.
+                </p>
+
+                <a
+                    href="{% url 'marketing_strategy_planner' %}"
+                    class="btn btn-primary"
+                >
+                    Open Strategy Planner
+                </a>
+
+            </div>
+
+        </div>
+
+        <div class="col-12">
+
+            <div class="feature-card">
+
+                <span class="badge status-badge">
+                    Available
+                </span>
+                <div class="ex-icon-wrap">
+                    <svg viewBox="0 0 24 24"><use href="#i-chat"/></svg>
+                </div>
+
+                <h5>
+                    Customer Support Agent
                 </h5>
 
                 <p>
@@ -764,12 +451,15 @@
 
             <div class="feature-card">
 
-                <span class="badge bg-success status-badge">
+                <span class="badge status-badge">
                     Available
                 </span>
+                <div class="ex-icon-wrap">
+                    <svg viewBox="0 0 24 24"><use href="#i-building"/></svg>
+                </div>
 
                 <h5>
-                    🏢 Company Management
+                    Company Management
                 </h5>
 
                 <p>
@@ -792,12 +482,15 @@
 
             <div class="feature-card">
 
-                <span class="badge bg-success status-badge">
+                <span class="badge status-badge">
                     Available
                 </span>
+                <div class="ex-icon-wrap">
+                    <svg viewBox="0 0 24 24"><use href="#i-box"/></svg>
+                </div>
 
                 <h5>
-                    📦 Product Management
+                    Product Management
                 </h5>
 
                 <p>
@@ -820,12 +513,15 @@
 
             <div class="feature-card">
 
-                <span class="badge bg-success status-badge">
+                <span class="badge status-badge">
                     Available
                 </span>
+                <div class="ex-icon-wrap">
+                    <svg viewBox="0 0 24 24"><use href="#i-megaphone"/></svg>
+                </div>
 
                 <h5>
-                    📢 Campaign Management
+                    Campaign Management
                 </h5>
 
                 <p>
@@ -848,12 +544,15 @@
 
             <div class="feature-card">
 
-                <span class="badge bg-success status-badge">
+                <span class="badge status-badge">
                     Available
                 </span>
+                <div class="ex-icon-wrap">
+                    <svg viewBox="0 0 24 24"><use href="#i-spark"/></svg>
+                </div>
 
                 <h5>
-                    🤖 AI Content Generation
+                    Content Studio
                 </h5>
 
                 <p>
@@ -876,12 +575,15 @@
 
             <div class="feature-card">
 
-                <span class="badge bg-success status-badge">
+                <span class="badge status-badge">
                     Available
                 </span>
+                <div class="ex-icon-wrap">
+                    <svg viewBox="0 0 24 24"><use href="#i-chart"/></svg>
+                </div>
 
                 <h5>
-                    📊 Campaign Analytics
+                    Campaign Analytics
                 </h5>
 
                 <p>
@@ -904,12 +606,15 @@
 
             <div class="feature-card">
 
-                <span class="badge bg-success status-badge">
+                <span class="badge status-badge">
                     Available
                 </span>
+                <div class="ex-icon-wrap">
+                    <svg viewBox="0 0 24 24"><use href="#i-trend"/></svg>
+                </div>
 
                 <h5>
-                    💡 Decision Support
+                    Decision Support
                 </h5>
 
                 <p>
@@ -932,12 +637,15 @@
 
             <div class="feature-card">
 
-                <span class="badge bg-success status-badge">
+                <span class="badge status-badge">
                     Available
                 </span>
+                <div class="ex-icon-wrap">
+                    <svg viewBox="0 0 24 24"><use href="#i-chat"/></svg>
+                </div>
 
                 <h5>
-                    💬 Customer Support Agent
+                    Customer Support Agent
                 </h5>
 
                 <p>
@@ -960,12 +668,15 @@
 
             <div class="feature-card">
 
-                <span class="badge bg-success status-badge">
+                <span class="badge status-badge">
                     Available
                 </span>
+                <div class="ex-icon-wrap">
+                    <svg viewBox="0 0 24 24"><use href="#i-file"/></svg>
+                </div>
 
                 <h5>
-                    📄 AI Reports
+                    Reports
                 </h5>
 
                 <p>
@@ -988,12 +699,15 @@
 
             <div class="feature-card">
 
-                <span class="badge bg-success status-badge">
+                <span class="badge status-badge">
                     Available
                 </span>
+                <div class="ex-icon-wrap">
+                    <svg viewBox="0 0 24 24"><use href="#i-book"/></svg>
+                </div>
 
                 <h5>
-                    🧠 Knowledge Base
+                    Knowledge Base
                 </h5>
 
                 <p>
@@ -1017,7 +731,7 @@
     <div class="text-center text-muted mt-5 mb-3">
 
         <small>
-            AI Marketing Platform · Marketing Specialist Dashboard
+            AI.MarketPilot · Marketing Specialist Dashboard
         </small>
 
     </div>

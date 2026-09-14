@@ -47,30 +47,60 @@ class VectorStore:
         n_results=3
     ):
 
+        return self._query(
+            embedding=embedding,
+            company_id=company_id,
+            n_results=n_results,
+            include=None,
+        )
+
+    def search_with_evidence(
+        self,
+        embedding,
+        company_id,
+        n_results=3,
+    ):
+        return self._query(
+            embedding=embedding,
+            company_id=company_id,
+            n_results=n_results,
+            include=["documents", "metadatas", "distances"],
+        )
+
+    def distance_space(self):
+        from ai_services.analytics.knowledge_support import collection_space
+
+        return collection_space(self)
+
+    def _query(self, embedding, company_id, n_results=3, include=None):
         where_filter = {
             "$or": [
                 {"company_id": int(company_id)},
                 {"company_id": str(company_id)},
             ]
         }
+        kwargs = {
+            "query_embeddings": [embedding],
+            "n_results": max(1, int(n_results)),
+            "where": where_filter,
+        }
+        if include:
+            kwargs["include"] = include
 
         try:
-            results = self.collection.query(
-                query_embeddings=[embedding],
-                n_results=max(1, int(n_results)),
-                where=where_filter
-            )
+            return self.collection.query(**kwargs)
         except Exception:
+            fallback = {
+                "query_embeddings": [embedding],
+                "n_results": max(1, int(n_results)),
+                "where": {"company_id": int(company_id)},
+            }
+            if include:
+                fallback["include"] = include
             try:
-                results = self.collection.query(
-                    query_embeddings=[embedding],
-                    n_results=max(1, int(n_results)),
-                    where={"company_id": int(company_id)}
-                )
+                return self.collection.query(**fallback)
             except Exception:
-                results = {"documents": [[]]}
-
-        return results
+                return {"documents": [[]], "metadatas": [[]], "distances": [[]]}
 
     def company_has_chunks(self, company_id):
         for where_filter in (
