@@ -77,7 +77,7 @@ class CustomerVoiceAnalyzer:
             self._retriever = Retriever()
         return self._retriever
 
-    def gather_customer_messages(self, company, campaign=None):
+    def gather_customer_messages(self, company, campaign=None, conversation=None):
         queryset = (
             SupportMessage.objects
             .filter(
@@ -87,6 +87,9 @@ class CustomerVoiceAnalyzer:
             .select_related("conversation")
             .order_by("created_at")
         )
+        if conversation is not None:
+            conversation_id = getattr(conversation, "id", conversation)
+            queryset = queryset.filter(conversation_id=conversation_id)
         filtered = False
         if campaign is not None and (campaign.start_date or campaign.end_date):
             messages = []
@@ -105,12 +108,14 @@ class CustomerVoiceAnalyzer:
         self,
         company,
         campaign=None,
+        conversation=None,
         use_ai=False,
         include_knowledge_gaps=False,
     ):
         messages, filtered = self.gather_customer_messages(
             company,
             campaign=campaign,
+            conversation=conversation,
         )
         conversation_ids = {
             message.conversation_id for message in messages

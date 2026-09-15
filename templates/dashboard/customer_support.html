@@ -11,7 +11,7 @@
     content="width=device-width, initial-scale=1"
 >
 
-<title>Customer Support Analytics</title>
+<title>Support Agent</title>
 
 <link
     href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
@@ -122,30 +122,18 @@
 <div class="{% if workspace_company %}container pb-5{% else %}ex-main{% endif %}">
 
 <div class="page-header">
-
-    <div class="d-flex justify-content-between align-items-center">
-
-        <div>
-
-            <h2>
-                Support Agent
-            </h2>
-
-            <p class="mb-0 opacity-75">
-                Open the customer-facing support chat, then review conversations and analytics.
-            </p>
-
-        </div>
-
-        <a
-            href="{% if workspace_company %}{% url 'company_workspace' workspace_company.id %}{% else %}{% url 'dashboard_home' %}{% endif %}"
-            class="btn btn-outline-light"
-        >
-            ← {% if workspace_company %}Overview{% else %}Dashboard{% endif %}
-        </a>
-
+    <div>
+        <h2>Support Agent</h2>
+        <p class="mb-0 opacity-75">
+            Open the customer-facing support chat and review conversations.
+        </p>
     </div>
-
+    <a
+        href="{% if workspace_company %}{% url 'company_workspace' workspace_company.id %}{% else %}{% url 'dashboard_home' %}{% endif %}"
+        class="btn btn-light dashboard-link"
+    >
+        ← {% if workspace_company %}Overview{% else %}Dashboard{% endif %}
+    </a>
 </div>
 
 
@@ -286,282 +274,23 @@
     </div>
 
 
-    {% if support_analytics %}
-
-        <div class="card-box" id="support-analytics">
-
-            <h4 class="mb-4">
-                Support Analytics
-            </h4>
-
-
-            {% if support_analytics.summary %}
-
-                <div class="row g-3 mb-4">
-                    <div class="col-lg-4 col-md-6">
-                        <div class="analytics-box">
-                            <div class="analytics-label">Conversations</div>
-                            <div class="analytics-value">{{ support_analytics.summary.total_conversations|default:0 }}</div>
-                        </div>
-                    </div>
-                    <div class="col-lg-4 col-md-6">
-                        <div class="analytics-box">
-                            <div class="analytics-label">Customer messages</div>
-                            <div class="analytics-value">{{ support_analytics.summary.customer_messages|default:0 }}</div>
-                        </div>
-                    </div>
-                    <div class="col-lg-4 col-md-6">
-                        <div class="analytics-box">
-                            <div class="analytics-label">AI / agent messages</div>
-                            <div class="analytics-value">{{ support_analytics.summary.ai_messages|default:0 }}</div>
-                        </div>
-                    </div>
-                </div>
-
-            {% else %}
-
-                <div class="alert alert-secondary">
-                    No support summary is available yet.
-                </div>
-
-            {% endif %}
-
-
-            {% if support_analytics.report %}
-
-                <hr class="my-4">
-
-
-                <h5 class="mb-3">
-            Support report
-                </h5>
-
-
-                <div class="report-box">
-
-
-                    <h6 class="fw-bold mb-3">
-                        Insights
-                    </h6>
-
-
-                    {% if support_analytics.report.insights %}
-
-                        {% for insight in support_analytics.report.insights %}
-
-                            <div class="insight-item">
-
-                                {{ insight }}
-
-                            </div>
-
-                        {% endfor %}
-
-                    {% else %}
-
-                        <p class="text-muted">
-                            No insights available for the current support data.
-                        </p>
-
-                    {% endif %}
-
-
-                    <h6 class="fw-bold mt-4 mb-3">
-                        Recommendations
-                    </h6>
-
-
-                    {% if support_analytics.report.recommendations %}
-
-                        {% for recommendation in support_analytics.report.recommendations %}
-
-                            <div class="recommendation-item">
-
-                                {{ recommendation }}
-
-                            </div>
-
-                        {% endfor %}
-
-                    {% else %}
-
-                        <p class="text-muted mb-0">
-                            No recommendations generated for the current support data.
-                        </p>
-
-                    {% endif %}
-
-
-                </div>
-
-            {% endif %}
-
-        </div>
-
-    {% endif %}
-
-
-    {% if customer_voice %}
-        <div class="card-box" id="customer-voice">
-            <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-4">
-                <div>
-                    <h4 class="mb-1">Customer Voice Intelligence</h4>
-                    <p class="text-muted mb-0">
-                        Topics and sentiment are derived from customer messages only, not AI replies.
-                    </p>
-                </div>
-                <form method="POST">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="analyze_customer_voice">
-                    {% if selected_company %}
-                        <input type="hidden" name="company" value="{{ selected_company.id }}">
-                    {% endif %}
-                    <button type="submit" class="btn btn-primary">
-                        Analyze Customer Voice
-                    </button>
-                </form>
-            </div>
-
-            {% if voice_error %}
-                <div class="alert alert-warning">{{ voice_error }}</div>
-            {% endif %}
-            {% if customer_voice.ai_error %}
-                <div class="alert alert-warning">{{ customer_voice.ai_error }}</div>
-            {% endif %}
-
-            {% if customer_voice.insufficient_data %}
-                <p class="text-muted">Insufficient Data</p>
-            {% else %}
-                <h5 class="mb-3">Top Customer Topics</h5>
-                {% if customer_voice.topics %}
-                    <div class="row g-3 mb-4">
-                        {% for item in customer_voice.topics %}
-                            <div class="col-md-4">
-                                <div class="analytics-box">
-                                    <div class="analytics-label">{{ item.label }}</div>
-                                    <div class="analytics-value">{{ item.count }}</div>
-                                    <div class="small text-muted">{{ item.percentage }}%</div>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <p class="text-muted">No topic signal yet.</p>
-                {% endif %}
-
-                <h5 class="mb-3">Customer Sentiment</h5>
-                <div class="row g-3 mb-4">
-                    {% for label, item in customer_voice.sentiment.items %}
-                        <div class="col-md-3">
-                            <div class="analytics-box">
-                                <div class="analytics-label">{{ label }}</div>
-                                <div class="analytics-value">{{ item.count }}</div>
-                                <div class="small text-muted">{{ item.percentage }}%</div>
-                            </div>
-                        </div>
-                    {% endfor %}
-                </div>
-
-                <h5 class="mb-3">Recurring Concerns</h5>
-                {% if customer_voice.concerns %}
-                    <ul>
-                        {% for item in customer_voice.concerns %}
-                            <li>{{ item.label }} — {{ item.count }} mentions ({{ item.percentage }}%)</li>
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <p class="text-muted">No recurring concerns identified.</p>
-                {% endif %}
-
-                <h5 class="mb-3">Common Questions</h5>
-                {% if customer_voice.questions %}
-                    <ul>
-                        {% for item in customer_voice.questions %}
-                            <li>{{ item.label }} ({{ item.count }})</li>
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <p class="text-muted">No common question themes yet.</p>
-                {% endif %}
-            {% endif %}
-
-            {% if customer_voice.knowledge_gaps %}
-                <h5 class="mb-3">Knowledge Gaps</h5>
-                {% for gap in customer_voice.knowledge_gaps %}
-                    <div class="insight-item">
-                        <div class="analytics-label">Question Theme</div>
-                        <strong>{{ gap.theme }}</strong>
-                        <div class="mt-2">
-                            Knowledge Support: {{ gap.knowledge_support }}
-                            {% if gap.relevance_label %}
-                                · {{ gap.relevance_label }}
-                            {% endif %}
-                        </div>
-                        <div class="small text-muted mt-1">
-                            {{ gap.related_questions }} related customer questions
-                            · Relevant chunks: {{ gap.retrieved_chunks }}
-                        </div>
-                        {% if gap.retrieved_documents %}
-                            <div class="small mt-1">
-                                Sources Found: {{ gap.retrieved_documents|join:", " }}
-                            </div>
-                        {% elif gap.retrieved_chunks %}
-                            <div class="small text-muted mt-1">
-                                No source document name was stored for the retrieved chunks.
-                            </div>
-                        {% endif %}
-                        {% if gap.classification_basis == "retrieval_availability" %}
-                            <div class="small text-muted mt-1">
-                                Based on retrieval availability, not semantic relevance.
-                            </div>
-                        {% endif %}
-                    </div>
-                {% endfor %}
-            {% endif %}
-
-            {% if customer_voice.ai_summary %}
-                <hr class="my-4">
-                <h5 class="mb-3">Customer Voice AI Summary</h5>
-                <p>{{ customer_voice.ai_summary.summary }}</p>
-                {% if customer_voice.ai_summary.main_interests %}
-                    <div class="analytics-label">Main customer interests</div>
-                    <ul>
-                        {% for item in customer_voice.ai_summary.main_interests %}
-                            <li>{{ item }}</li>
-                        {% endfor %}
-                    </ul>
-                {% endif %}
-                {% if customer_voice.ai_summary.friction_points %}
-                    <div class="analytics-label">Primary friction points</div>
-                    <ul>
-                        {% for item in customer_voice.ai_summary.friction_points %}
-                            <li>{{ item }}</li>
-                        {% endfor %}
-                    </ul>
-                {% endif %}
-                {% if customer_voice.ai_summary.knowledge_recommendations %}
-                    <div class="analytics-label">Knowledge Base recommendations</div>
-                    <ul>
-                        {% for item in customer_voice.ai_summary.knowledge_recommendations %}
-                            <li>{{ item }}</li>
-                        {% endfor %}
-                    </ul>
-                {% endif %}
-                {% if customer_voice.ai_summary.marketing_recommendations %}
-                    <div class="analytics-label">Recommended actions</div>
-                    <ul>
-                        {% for item in customer_voice.ai_summary.marketing_recommendations %}
-                            <li>{{ item }}</li>
-                        {% endfor %}
-                    </ul>
-                {% endif %}
-            {% else %}
+    <div class="card-box">
+        <div class="d-flex flex-column flex-md-row justify-content-between gap-3">
+            <div>
+                <h4 class="mb-1">Need customer-voice metrics?</h4>
                 <p class="text-muted mb-0">
-                    Use Analyze Customer Voice to classify themes with AI, check Knowledge Base support, and generate a summary.
+                    Support Analytics is a separate page. Pick a company or conversation there.
                 </p>
-            {% endif %}
+            </div>
+            <a
+                class="btn btn-primary"
+                href="{% if workspace_company %}{% url 'company_support_analytics' workspace_company.id %}{% else %}{% url 'customer_support_analytics' %}{% endif %}{% if selected_company %}?company={{ selected_company.id }}{% endif %}"
+            >
+                Open Support Analytics
+            </a>
         </div>
-    {% endif %}
+    </div>
+
 
 
     <div class="card-box">
@@ -597,6 +326,14 @@
                     <strong>
                         Conversation #{{ conversation.id }}
                     </strong>
+                    {% if selected_company %}
+                        <a
+                            class="btn btn-sm btn-outline-primary"
+                            href="{% if workspace_company %}{% url 'company_support_analytics' workspace_company.id %}{% else %}{% url 'customer_support_analytics' %}{% endif %}?company={{ selected_company.id }}&conversation={{ conversation.id }}"
+                        >
+                            View analytics
+                        </a>
+                    {% endif %}
 
                     <span class="text-muted small">
                         {{ conversation.started_at }}

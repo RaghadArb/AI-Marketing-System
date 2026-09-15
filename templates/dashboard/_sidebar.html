@@ -1,5 +1,6 @@
 {% include "dashboard/_icon_sprite.html" %}
-<aside class="ex-sidebar">
+<button type="button" class="ex-menu-toggle" id="ex-nav-toggle" aria-controls="ex-sidebar" aria-expanded="false">Menu</button>
+<aside class="ex-sidebar" id="ex-sidebar">
     <div class="ex-brand">
         {% include "dashboard/_brand_mark.html" %}
         <div>
@@ -28,7 +29,7 @@
         <a href="{% url 'ai_content_dashboard' %}" class="{% if active == 'ai' or active == 'ai_content' %}active{% endif %}">
             <svg viewBox="0 0 24 24"><use href="#i-spark"/></svg> Content Studio
         </a>
-        <a href="{% url 'campaigns_dashboard' %}" class="{% if active == 'analytics' %}active{% endif %}">
+        <a href="{% url 'analytics_hub' %}" class="{% if active == 'analytics' %}active{% endif %}">
             <svg viewBox="0 0 24 24"><use href="#i-chart"/></svg> Analytics
         </a>
         <a href="{% url 'reports_dashboard' %}" class="{% if active == 'reports' %}active{% endif %}">
@@ -38,7 +39,7 @@
         <a href="{% url 'customer_support_dashboard' %}" class="{% if active == 'support' %}active{% endif %}">
             <svg viewBox="0 0 24 24"><use href="#i-chat"/></svg> Support Agent
         </a>
-        <a href="{% url 'customer_support_dashboard' %}#support-analytics" class="{% if active == 'support_analytics' %}active{% endif %}">
+        <a href="{% url 'customer_support_analytics' %}" class="{% if active == 'support_analytics' %}active{% endif %}">
             <svg viewBox="0 0 24 24"><use href="#i-trend"/></svg> Support Analytics
         </a>
         <a href="{% url 'knowledge_base_dashboard' %}" class="{% if active == 'knowledge' %}active{% endif %}">
@@ -49,3 +50,43 @@
         <a href="{% url 'logout' %}" class="btn btn-outline-light w-100">Sign out</a>
     </div>
 </aside>
+<script>
+(function () {
+    var toggle = document.getElementById("ex-nav-toggle");
+    var sidebar = document.getElementById("ex-sidebar");
+    if (toggle && sidebar) {
+        toggle.addEventListener("click", function () {
+            var open = document.body.classList.toggle("nav-open");
+            toggle.setAttribute("aria-expanded", open ? "true" : "false");
+        });
+        document.addEventListener("click", function (event) {
+            if (!document.body.classList.contains("nav-open")) return;
+            if (sidebar.contains(event.target) || toggle.contains(event.target)) return;
+            document.body.classList.remove("nav-open");
+            toggle.setAttribute("aria-expanded", "false");
+        });
+    }
+    function persistScroll(event) {
+        var form = event.target;
+        if (!form || form.tagName !== "FORM") return;
+        if ((form.method || "get").toLowerCase() !== "post") return;
+        try {
+            sessionStorage.setItem("ex-scroll-y", String(window.scrollY || window.pageYOffset || 0));
+            sessionStorage.setItem("ex-scroll-path", window.location.pathname);
+        } catch (err) {}
+    }
+    document.addEventListener("submit", persistScroll, true);
+    document.addEventListener("DOMContentLoaded", function () {
+        if (window.location.hash) return;
+        try {
+            var path = sessionStorage.getItem("ex-scroll-path");
+            var y = sessionStorage.getItem("ex-scroll-y");
+            sessionStorage.removeItem("ex-scroll-y");
+            sessionStorage.removeItem("ex-scroll-path");
+            if (path === window.location.pathname && y) {
+                window.scrollTo(0, parseInt(y, 10) || 0);
+            }
+        } catch (err) {}
+    });
+})();
+</script>

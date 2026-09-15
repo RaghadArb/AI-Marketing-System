@@ -10,6 +10,7 @@ from .views import (
     company_workspace,
 
     campaigns_dashboard,
+    analytics_hub,
     campaign_analytics_dashboard,
     analytics_chart,
 
@@ -23,6 +24,7 @@ from .views import (
     campaign_edit,
     campaign_delete,
     customer_support_dashboard,
+    customer_support_analytics,
     reports_dashboard,
     knowledge_base_dashboard,
     knowledge_document_create,
@@ -88,15 +90,27 @@ urlpatterns = [
     ),
 
     path(
+        "workspace/<int:company_id>/support/",
+        customer_support_dashboard,
+        name="company_support_dashboard"
+    ),
+
+    path(
         "workspace/<int:company_id>/ai-content/",
         ai_content_dashboard,
         name="company_ai_content_dashboard"
     ),
 
     path(
-        "workspace/<int:company_id>/support/",
-        customer_support_dashboard,
-        name="company_support_dashboard"
+        "workspace/<int:company_id>/analytics/",
+        analytics_hub,
+        name="company_analytics_hub"
+    ),
+
+    path(
+        "workspace/<int:company_id>/support-analytics/",
+        customer_support_analytics,
+        name="company_support_analytics"
     ),
 
     path(
@@ -120,6 +134,12 @@ urlpatterns = [
         "campaigns/",
         campaigns_dashboard,
         name="campaigns_dashboard"
+    ),
+
+    path(
+        "analytics/",
+        analytics_hub,
+        name="analytics_hub"
     ),
 
     path(
@@ -203,9 +223,14 @@ urlpatterns = [
     # CUSTOMER SUPPORT 
     # ======================================================
     path(
-    "customer-support/",
-    customer_support_dashboard,
-    name="customer_support_dashboard"
+        "customer-support/",
+        customer_support_dashboard,
+        name="customer_support_dashboard"
+    ),
+    path(
+        "support-analytics/",
+        customer_support_analytics,
+        name="customer_support_analytics"
     ),
     
     

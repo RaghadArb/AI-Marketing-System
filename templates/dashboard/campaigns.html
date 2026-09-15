@@ -65,41 +65,26 @@
 <div class="{% if workspace_company %}container pb-5{% else %}ex-main{% endif %}">
 
     <div class="page-header">
-
-        <div class="d-flex justify-content-between align-items-center">
-
-            <div>
-
-                <h2>
-                    Campaigns
-                </h2>
-
-                <p class="mb-0 opacity-75">
-                    Create, manage and analyze marketing campaigns.
-                </p>
-
-            </div>
-
-            <div>
-
-                <a
-                    href="{% if workspace_company %}{% url 'company_workspace' workspace_company.id %}{% else %}{% url 'dashboard_home' %}{% endif %}"
-                    class="btn btn-outline-light me-2"
-                >
-                    ← {% if workspace_company %}Overview{% else %}Dashboard{% endif %}
-                </a>
-
-                <a
-                    href="{% url 'campaign_create' %}{% if workspace_company %}?workspace={{ workspace_company.id }}{% endif %}"
-                    class="btn btn-light"
-                >
-                    + Add Campaign
-                </a>
-
-            </div>
-
+        <div>
+            <h2>Campaigns</h2>
+            <p class="mb-0 opacity-75">
+                Create, manage and analyze marketing campaigns.
+            </p>
         </div>
-
+        <div class="header-actions">
+            <a
+                href="{% if workspace_company %}{% url 'company_workspace' workspace_company.id %}{% else %}{% url 'dashboard_home' %}{% endif %}"
+                class="btn btn-light dashboard-link"
+            >
+                ← {% if workspace_company %}Overview{% else %}Dashboard{% endif %}
+            </a>
+            <a
+                href="{% url 'campaign_create' %}{% if workspace_company %}?workspace={{ workspace_company.id }}{% endif %}"
+                class="btn btn-outline-light"
+            >
+                + Add Campaign
+            </a>
+        </div>
     </div>
 
 

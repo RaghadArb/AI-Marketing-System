@@ -1,13 +1,26 @@
+import logging
 import os
 import re
 from io import BytesIO
 
 from django.core.files.base import ContentFile
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 from ai_services.clients.cloudflare_image_client import (
     CloudflareImageClient,
 )
+
+logger = logging.getLogger("ai_services.poster_generator")
+
+POSTER_MODERATION_USER_MESSAGE = (
+    "Poster generation was rejected by the image provider for this "
+    "prompt or reference image. Try changing the creative brief or "
+    "generating without the product reference image."
+)
+
+
+class PosterModerationRejected(RuntimeError):
+    """Cloudflare error 3030 after the allowed moderation retry."""
 
 
 class PosterGenerator:
@@ -17,8 +30,8 @@ class PosterGenerator:
     - the chosen AI text suggestion
     - the marketing specialist's creative brief
 
-    If Cloudflare returns safety error 3030, one simplified retry
-    is attempted automatically.
+    Image generation goes only through Cloudflare FLUX.
+    Failures raise; this class never returns a local/static poster.
     """
 
     def __init__(self):
@@ -97,24 +110,64 @@ class PosterGenerator:
 
         return fields
 
-    @staticmethod
-    def _is_cloudflare_flagged_error(
-        exc
-    ):
-        message = str(exc).lower()
+    @classmethod
+    def _sanitize_for_image_model(cls, value):
+        text = cls._clean(value)
+        if not text:
+            return ""
+        text = re.sub(
+            r"\b\d+\s*%\s*(off|discount|خصم)?\b",
+            "seasonal offer",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(
+            r"\b(discount|sale|promo(?:tion)?|coupon|% off)\b",
+            "offer",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(r"[$€£]\s?\d+(?:[.,]\d+)?", "offer", text)
+        return cls._clean(text)
 
+    @staticmethod
+    def _cloudflare_http_status(exc):
+        match = re.search(r"HTTP\s+(\d+)", str(exc), flags=re.IGNORECASE)
+        if not match:
+            return None
+        return int(match.group(1))
+
+    @staticmethod
+    def _cloudflare_error_code(exc):
+        match = re.search(
+            r"['\"]code['\"]\s*:\s*(\d+)",
+            str(exc),
+        )
+        if match:
+            return int(match.group(1))
+        return None
+
+    @classmethod
+    def _is_cloudflare_flagged_error(cls, exc):
+        http_status = cls._cloudflare_http_status(exc)
+        if http_status in (401, 403, 408, 429, 500, 502, 503, 504):
+            return False
+        if http_status is not None and http_status != 400:
+            return False
+        code = cls._cloudflare_error_code(exc)
+        if code == 3030:
+            return True
+        message = str(exc).lower()
         return (
-            "3030" in message
-            or "output has been flagged" in message
-            or "choose another prompt" in message
+            "output has been flagged" in message
+            and "choose another prompt" in message
         )
 
-    @staticmethod
-    def _is_reference_image_error(
-        exc
-    ):
+    @classmethod
+    def _is_reference_image_error(cls, exc):
+        if cls._is_cloudflare_flagged_error(exc):
+            return False
         message = str(exc).lower()
-
         return (
             "input_image" in message
             or "reference image" in message
@@ -203,12 +256,15 @@ class PosterGenerator:
         self,
         prompt,
         reference_image=None,
+        seed=None,
     ):
         kwargs = {
             "prompt": prompt,
             "width": 1024,
             "height": 1024,
         }
+        if seed is not None:
+            kwargs["seed"] = seed
 
         if reference_image:
             kwargs["reference_image"] = (
@@ -241,435 +297,164 @@ class PosterGenerator:
 
             raise
 
-    @staticmethod
-    def _resample_filter():
-        resampling = getattr(Image, "Resampling", None)
-        if resampling is not None:
-            return resampling.LANCZOS
-        return getattr(Image, "LANCZOS", Image.BICUBIC)
-
-    @staticmethod
-    def _load_font(size):
-        candidates = [
-            r"C:\Windows\Fonts\segoeui.ttf",
-            r"C:\Windows\Fonts\arial.ttf",
-            r"C:\Windows\Fonts\tahoma.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-        ]
-        for path in candidates:
-            if os.path.exists(path):
-                try:
-                    return ImageFont.truetype(path, size)
-                except OSError:
-                    continue
-        return ImageFont.load_default()
-
-    def _compose_local_poster(
-        self,
-        campaign_content,
-        reference_image=None,
-        fields=None,
-    ):
-        size = 1024
-        poster = Image.new("RGB", (size, size), (23, 32, 51))
-        draw = ImageDraw.Draw(poster)
-        draw.rectangle((0, 0, size, 36), fill=(47, 111, 102))
-        draw.rectangle((0, size - 120, size, size), fill=(16, 22, 34))
-
-        fields = fields or self._extract_fields(
-            campaign_content.content_text
-        )
-        campaign = campaign_content.campaign
-        product = getattr(campaign, "product", None)
-        headline = (
-            self._clean(fields.get("title"))
-            or self._clean(campaign_content.title)
-            or self._clean(getattr(campaign, "campaign_name", ""))
-            or "Campaign poster"
-        )
-        supporting = (
-            self._clean(fields.get("cta"))
-            or self._clean(getattr(product, "product_name", "") if product else "")
-            or self._clean(getattr(campaign.company, "company_name", ""))
-        )
-
-        product_image = None
-        if reference_image and reference_image.get("bytes"):
-            try:
-                product_image = Image.open(
-                    BytesIO(reference_image["bytes"])
-                ).convert("RGB")
-            except Exception:
-                product_image = None
-
-        if product_image is None:
-            image_field = getattr(product, "product_image", None) if product else None
-            if image_field and getattr(image_field, "name", None):
-                try:
-                    image_field.open("rb")
-                    product_image = Image.open(image_field).convert("RGB")
-                except Exception:
-                    product_image = None
-                finally:
-                    try:
-                        image_field.close()
-                    except Exception:
-                        pass
-
-        if product_image is not None:
-            product_image.thumbnail((720, 560), self._resample_filter())
-            offset = (
-                (size - product_image.width) // 2,
-                120 + (560 - product_image.height) // 2,
-            )
-            poster.paste(product_image, offset)
-        else:
-            draw.rounded_rectangle(
-                (180, 160, 844, 680),
-                radius=28,
-                outline=(47, 111, 102),
-                width=4,
-            )
-
-        title_font = self._load_font(42)
-        support_font = self._load_font(24)
-        draw.text(
-            (64, size - 96),
-            headline[:48],
-            fill=(255, 255, 255),
-            font=title_font,
-        )
-        if supporting:
-            draw.text(
-                (64, size - 50),
-                supporting[:52],
-                fill=(184, 196, 212),
-                font=support_font,
-            )
-
-        buffer = BytesIO()
-        poster.save(buffer, format="PNG")
-        return buffer.getvalue()
-
     def _build_primary_prompt(
         self,
         campaign_content,
         creative_brief,
         fields,
         has_product_reference=False,
+        variation_index=1,
     ):
         campaign = campaign_content.campaign
         company = campaign.company
         product = campaign.product
+        creative_brief = creative_brief or {}
 
-        company_name = self._clean(
-            getattr(
-                company,
-                "company_name",
-                "",
-            )
-        )
-
-        industry = self._clean(
-            getattr(
-                company,
-                "industry",
-                "",
-            )
-        )
-
+        company_name = self._clean(getattr(company, "company_name", ""))
+        industry = self._clean(getattr(company, "industry", ""))
         product_name = (
-            self._clean(
-                getattr(
-                    product,
-                    "product_name",
-                    "",
-                )
-            )
+            self._clean(getattr(product, "product_name", ""))
             if product
             else ""
         )
-
         product_description = (
-            self._clean(
-                getattr(
-                    product,
-                    "description",
-                    "",
-                )
-            )
+            self._clean(getattr(product, "description", ""))
             if product
             else ""
         )
+        focus = self._clean(creative_brief.get("focus", ""))
+        style = self._clean(creative_brief.get("style", ""))
+        colors = self._clean(creative_brief.get("colors", ""))
+        background = self._clean(creative_brief.get("background", ""))
+        composition = self._clean(creative_brief.get("composition", ""))
+        mood = self._clean(creative_brief.get("mood", ""))
+        additional = self._clean(creative_brief.get("additional", ""))
 
-        title = (
-            fields["title"]
-            or self._clean(
-                campaign_content.title
-            )
+        def line(label, value):
+            value = self._clean(value)
+            if not value:
+                return ""
+            return f"{label}: {value}\n"
+
+        brief_block = "".join(
+            [
+                line("Main advertising focus / imagery", focus),
+                line("Visual style", style),
+                line("Colors", colors),
+                line("Background", background),
+                line("Composition / layout", composition),
+                line("Mood / tone", mood),
+                line("Extra user instructions", additional),
+            ]
+        ).strip() or "No additional creative brief was provided."
+
+        angle = (
+            "Use a slightly different camera angle than other variations, "
+            "but keep every requested brief detail."
+            if variation_index > 1
+            else "Follow the requested composition exactly."
         )
 
-        caption = fields["caption"]
-        cta = fields["cta"]
-
-        focus = self._clean(
-            creative_brief.get(
-                "focus",
-                ""
-            )
-        )
-
-        style = self._clean(
-            creative_brief.get(
-                "style",
-                "Premium Product Ad"
-            )
-        )
-
-        colors = self._clean(
-            creative_brief.get(
-                "colors",
-                ""
-            )
-        )
-
-        background = self._clean(
-            creative_brief.get(
-                "background",
-                ""
-            )
-        )
-
-        composition = self._clean(
-            creative_brief.get(
-                "composition",
-                "Product Centered"
-            )
-        )
-
-        mood = self._clean(
-            creative_brief.get(
-                "mood",
-                ""
-            )
-        )
-
-        additional = self._clean(
-            creative_brief.get(
-                "additional",
-                ""
-            )
-        )
-
-        product_reference_instructions = ""
-
-        if has_product_reference:
-            product_reference_instructions = """
-PRODUCT REFERENCE IMAGE
-A product photo is provided as input_image_0.
-Preserve the visual identity and recognizable appearance of the referenced product.
-Use this exact product as the hero subject of the advertisement.
-Do not invent a different product, substitute a similar item, or change the product's distinctive look.
-"""
+        product_subject = product_name or "the advertised commercial product"
+        campaign_name = self._clean(getattr(campaign, "campaign_name", ""))
 
         return f"""
-Create one finished, professional square social-media advertisement.
+Create one square commercial advertising photograph for social media.
 
-This must look like a real commercial POSTER, not a plain product photo.
+Generate the IMAGE described by the marketing specialist's creative brief.
+Do not ignore or replace those instructions with a generic template.
 
-BRAND
-Company: {company_name}
-Industry: {industry}
+VISUAL SUBJECT
+Depict this product as a physical object in the scene: {product_subject}
+{line("What the product looks like", product_description).strip()}
+{line("Industry context", industry).strip()}
+Company, brand, and campaign names are private metadata only.
+Do not print, engrave, or overlay any of these strings: {company_name or "n/a"}, {product_subject}, {campaign_name or "n/a"}.
 
-PRODUCT
-Product name: {product_name or "Commercial product"}
-Product description: {product_description or "Not provided"}
-{product_reference_instructions}
-CAMPAIGN
-Campaign: {campaign.campaign_name}
-Objective: {campaign.objective}
-Platform: {campaign.platform}
+CREATIVE BRIEF FROM THE USER
+{brief_block}
 
-MARKETING SPECIALIST CREATIVE BRIEF
-Main advertising focus:
-{focus}
+{angle}
 
-Visual style:
-{style}
-
-Preferred color palette:
-{colors or "Choose colors that professionally fit the product and brand"}
-
-Background or scene:
-{background or "Professional clean advertising environment"}
-
-Composition:
-{composition}
-
-Mood:
-{mood or "Professional and commercially attractive"}
-
-Additional creative instructions:
-{additional or "None"}
-
-SUGGESTION MESSAGE
-Use this caption only to understand the advertising message:
-{caption or title}
-
-POSTER COPY
-Headline:
-{title}
-
-Call to action:
-{cta}
-
-DESIGN REQUIREMENTS
-- The product must be the hero of the advertisement.
-- Show the product prominently and clearly.
-- Create a complete designed advertisement with layout,
-  hierarchy, background, spacing, and commercial styling.
-- Follow the marketing specialist's creative brief closely.
-- Use professional product-advertising photography.
-- Use premium lighting and realistic shadows.
-- Create intentional negative space for typography.
-- Match the requested composition.
-- Match the requested color palette when provided.
-- Match the requested background or scene when provided.
-- Keep the visual polished, modern, and suitable for Instagram.
-- Avoid a generic stock-photo appearance.
-- Avoid a plain isolated product-only image.
-- Avoid collage aesthetics unless explicitly requested.
-- Do not invent prices, discounts, promo codes, URLs,
-  statistics, certifications, or social handles.
-- Do not show hashtags.
-- Do not show prompt labels or instructions.
-- Keep visible marketing text minimal.
+RULES
+Create a clean commercial advertising visual.
+Do not add random text, letters, logos, watermarks, mirrored writing, reversed characters, Arabic or English typography, headlines, captions, or unreadable lettering.
+Do not paint words onto the image unless the creative brief explicitly asks for specific on-image text.
+Focus on product placement, scene, composition, lighting, colors, style, background, and mood.
+Do not invent prices, discounts, promo codes, URLs, or statistics.
 """.strip()
 
-    def _build_safe_retry_prompt(
-        self,
-        campaign_content,
-        creative_brief,
-        has_product_reference=False,
-    ):
-        campaign = campaign_content.campaign
-        product = campaign.product
+    def _reference_image_for_attempt(self, campaign_content):
+        # Product photos are not attached on the first attempt.
+        # Tests may override this to verify the 3030 text-only retry.
+        return None
 
-        product_name = (
-            self._clean(
-                getattr(
-                    product,
-                    "product_name",
-                    "",
-                )
-            )
-            if product
-            else "commercial product"
-        )
+    def _build_safe_retry_prompt(self, creative_brief):
+        creative_brief = creative_brief or {}
 
-        focus = self._clean(
-            creative_brief.get(
-                "focus",
-                ""
-            )
-        )
+        def line(label, value):
+            value = self._clean(value)
+            if not value:
+                return ""
+            return f"{label}: {value}\n"
 
-        style = self._clean(
-            creative_brief.get(
-                "style",
-                "Premium Product Ad"
-            )
-        )
-
-        colors = self._clean(
-            creative_brief.get(
-                "colors",
-                ""
-            )
-        )
-
-        background = self._clean(
-            creative_brief.get(
-                "background",
-                ""
-            )
-        )
-
-        composition = self._clean(
-            creative_brief.get(
-                "composition",
-                "Product Centered"
-            )
-        )
+        brief_block = "".join(
+            [
+                line("Focus", creative_brief.get("focus", "")),
+                line("Style", creative_brief.get("style", "")),
+                line("Colors", creative_brief.get("colors", "")),
+                line("Background", creative_brief.get("background", "")),
+                line("Composition", creative_brief.get("composition", "")),
+                line("Mood", creative_brief.get("mood", "")),
+                line(
+                    "Additional visual instructions",
+                    creative_brief.get("additional", ""),
+                ),
+            ]
+        ).strip() or "Use a clean commercial product scene."
 
         return f"""
-Create a clean square commercial product advertisement.
+Create a clean commercial product advertising photograph.
+No people unless explicitly required by the user.
+No text, letters, logos, trademarks, labels, watermarks or typography.
+Do not reproduce visible text from any reference.
+Focus only on product form, scene, lighting, colors and composition.
 
-Featured product:
-{product_name}
-
-Main visual:
-{focus or "Feature the product prominently"}
-
-Style:
-{style}
-
-Colors:
-{colors or "Professional brand-appropriate colors"}
-
-Background:
-{background or "Clean advertising background"}
-
-Composition:
-{composition}
-
-{"Use the provided product photo as input_image_0. Preserve the visual identity of that product and do not invent a different product." if has_product_reference else ""}
-
-Make the product the clear central hero.
-Use professional studio-style product photography,
-premium lighting, realistic shadows, elegant spacing,
-and a finished modern advertisement layout.
-
-No people.
-No text.
-No logos.
-No prices.
-No discounts.
-No watermarks.
+VISUAL BRIEF
+{brief_block}
 """.strip()
 
     def generate_for_content(
         self,
         campaign_content,
         creative_brief=None,
+        variation_index=1,
     ):
-        creative_brief = (
-            creative_brief
-            or {}
+        creative_brief = creative_brief or {}
+        fields = self._extract_fields(campaign_content.content_text)
+        campaign_content._poster_variation = variation_index
+        primary_prompt = self._build_primary_prompt(
+            campaign_content,
+            creative_brief,
+            fields,
+            variation_index=variation_index,
         )
-
-        fields = self._extract_fields(
-            campaign_content.content_text
+        reference_image = self._reference_image_for_attempt(
+            campaign_content
         )
-
-        reference_image = (
-            self._load_product_reference_image(
-                campaign_content
-            )
+        used_reference_image = bool(reference_image)
+        logger.info(
+            "Poster first attempt content_id=%s variation=%s "
+            "used_reference_image=%s",
+            getattr(campaign_content, "id", None),
+            variation_index,
+            used_reference_image,
         )
-
-        has_product_reference = bool(
-            reference_image
-        )
-
-        primary_prompt = (
-            self._build_primary_prompt(
-                campaign_content,
-                creative_brief,
-                fields,
-                has_product_reference=has_product_reference,
-            )
+        logger.info(
+            "Poster image prompt for content_id=%s variation=%s:\n%s",
+            getattr(campaign_content, "id", None),
+            variation_index,
+            primary_prompt,
         )
 
         try:
@@ -677,57 +462,72 @@ No watermarks.
                 primary_prompt,
                 reference_image=reference_image,
             )
+        except Exception as exc:
+            error_code = self._cloudflare_error_code(exc)
+            logger.info(
+                "Cloudflare image error content_id=%s code=%s http=%s",
+                getattr(campaign_content, "id", None),
+                error_code,
+                self._cloudflare_http_status(exc),
+            )
+            if not self._is_cloudflare_flagged_error(exc):
+                raise RuntimeError(
+                    f"Cloudflare image generation failed: {exc}"
+                ) from exc
 
-        except RuntimeError as exc:
-
-            if self._is_cloudflare_flagged_error(exc):
-                safe_prompt = (
-                    self._build_safe_retry_prompt(
-                        campaign_content,
-                        creative_brief,
-                        has_product_reference=has_product_reference,
-                    )
+            retry_prompt = self._build_safe_retry_prompt(creative_brief)
+            logger.info(
+                "Cloudflare moderation retry triggered content_id=%s "
+                "previous_used_reference_image=%s",
+                getattr(campaign_content, "id", None),
+                used_reference_image,
+            )
+            logger.info(
+                "Poster sanitized retry prompt for content_id=%s:\n%s",
+                getattr(campaign_content, "id", None),
+                retry_prompt,
+            )
+            try:
+                image_bytes = self._generate_image(
+                    retry_prompt,
+                    reference_image=None,
                 )
-                try:
-                    image_bytes = self._generate_image(
-                        safe_prompt,
-                        reference_image=reference_image,
-                    )
-                except Exception:
-                    image_bytes = self._compose_local_poster(
-                        campaign_content,
-                        reference_image=reference_image,
-                        fields=fields,
-                    )
-            else:
-                image_bytes = self._compose_local_poster(
-                    campaign_content,
-                    reference_image=reference_image,
-                    fields=fields,
+            except Exception as retry_exc:
+                logger.info(
+                    "Cloudflare moderation retry failed content_id=%s "
+                    "code=%s http=%s",
+                    getattr(campaign_content, "id", None),
+                    self._cloudflare_error_code(retry_exc),
+                    self._cloudflare_http_status(retry_exc),
                 )
+                raise PosterModerationRejected(
+                    POSTER_MODERATION_USER_MESSAGE
+                ) from retry_exc
 
-        except Exception:
-            image_bytes = self._compose_local_poster(
-                campaign_content,
-                reference_image=reference_image,
-                fields=fields,
+        if not self._valid_image_bytes(image_bytes):
+            raise RuntimeError(
+                "Image generation returned an invalid image. "
+                "No fallback poster was used."
             )
 
-        campaign = (
-            campaign_content.campaign
-        )
-
         filename = (
-            f"campaign_{campaign.id}_"
-            f"content_{campaign_content.id}.png"
+            f"campaign_{campaign_content.campaign.id}_"
+            f"content_{campaign_content.id}_v{variation_index}.png"
         )
-
         campaign_content.poster.save(
             filename,
-            ContentFile(
-                image_bytes
-            ),
+            ContentFile(image_bytes),
             save=True,
         )
-
         return campaign_content.poster
+
+    @staticmethod
+    def _valid_image_bytes(image_bytes):
+        if not image_bytes:
+            return False
+        try:
+            image = Image.open(BytesIO(image_bytes))
+            image.verify()
+            return True
+        except Exception:
+            return False

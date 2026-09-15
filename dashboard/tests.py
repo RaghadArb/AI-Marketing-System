@@ -1,8 +1,10 @@
 from datetime import date, timedelta
+from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.test import Client, SimpleTestCase, TestCase
+from PIL import Image
 
 from ai_services.analytics.metrics import calculate_aggregate_ctr
 from ai_services.services.campaign_advisor import CampaignAdvisor
@@ -595,6 +597,8 @@ class DashboardThemeSmokeTests(TestCase):
             "/dashboard/ai-content/",
             "/dashboard/knowledge-base/",
             "/dashboard/customer-support/",
+            "/dashboard/support-analytics/",
+            "/dashboard/analytics/",
             f"/dashboard/campaign/{self.campaign.id}/analytics/",
             "/dashboard/reports/",
         ]
@@ -694,6 +698,7 @@ class SocialPerformanceImportTests(TestCase):
                 },
             )
         self.assertEqual(response.status_code, 302)
+        self.assertIn("#social-performance", response["Location"])
         page = self.client.get(self.url)
         self.assertContains(page, "DEMO DATA")
         self.assertContains(page, "Simulated social-media performance")
@@ -1387,7 +1392,7 @@ class MarketingIntelligenceViewTests(TestCase):
         self.client.force_login(self.user)
         self.url = f"/dashboard/campaign/{self.campaign.id}/analytics/"
         self.support_url = (
-            f"/dashboard/customer-support/?company={self.company.id}"
+            f"/dashboard/support-analytics/?company={self.company.id}"
         )
 
     def _customer_thread(self, company, texts):
@@ -1477,6 +1482,7 @@ class MarketingIntelligenceViewTests(TestCase):
             post_response = self.client.post(
                 self.url,
                 {"action": "generate_ai_recommendations"},
+                follow=True,
             )
         self.assertEqual(post_response.status_code, 200)
         mocked.assert_called()
@@ -1499,6 +1505,7 @@ class MarketingIntelligenceViewTests(TestCase):
             response = self.client.post(
                 self.url,
                 {"action": "generate_ai_recommendations"},
+                follow=True,
             )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Campaign analytics are still available.")
@@ -1652,4 +1659,293 @@ class MarketingIntelligenceViewTests(TestCase):
             f"/dashboard/campaign/{self.other_campaign.id}/analytics/"
         )
         self.assertEqual(hidden.status_code, 404)
+
+    def test_campaigns_and_analytics_are_separate_pages(self):
+        campaigns = self.client.get("/dashboard/campaigns/")
+        analytics = self.client.get("/dashboard/analytics/")
+        self.assertEqual(campaigns.status_code, 200)
+        self.assertEqual(analytics.status_code, 200)
+        self.assertContains(campaigns, "+ Add Campaign")
+        self.assertContains(analytics, "Choose a campaign")
+        self.assertNotContains(analytics, "+ Add Campaign")
+
+    def test_support_agent_and_analytics_are_separate_pages(self):
+        agent = self.client.get("/dashboard/customer-support/")
+        analytics = self.client.get("/dashboard/support-analytics/")
+        self.assertEqual(agent.status_code, 200)
+        self.assertEqual(analytics.status_code, 200)
+        self.assertContains(agent, "Support Agent")
+        self.assertContains(analytics, "Support Analytics")
+        self.assertNotContains(agent, "Analyze Customer Voice")
+        self.assertContains(analytics, "Load analytics")
+
+
+class PosterGeneratorPromptTests(SimpleTestCase):
+
+    def _sample_content(self, product_name="Product"):
+        campaign = SimpleNamespace(
+            campaign_name="Seasonal Launch",
+            objective="Increase sales",
+            platform="Instagram",
+            company=SimpleNamespace(company_name="Brand Co", industry="Retail"),
+            product=SimpleNamespace(
+                product_name=product_name,
+                description=product_name,
+            ),
+        )
+        return SimpleNamespace(
+            title="Launch",
+            content_text="Title: Launch\nCaption: New\nCall to Action: Visit",
+            campaign=campaign,
+        )
+
+    def test_user_brief_fields_reach_the_image_prompt(self):
+        from ai_services.services.poster_generator import PosterGenerator
+
+        generator = PosterGenerator()
+        brief = {
+            "focus": "hero product shot",
+            "style": "Minimal luxury",
+            "colors": "black and gold",
+            "background": "dark studio",
+            "composition": "product centered with dramatic side lighting",
+            "mood": "cinematic",
+            "additional": "floating gold particles",
+        }
+        prompt = generator._build_primary_prompt(
+            self._sample_content("Perfume"),
+            brief,
+            {},
+            variation_index=1,
+        )
+        for required in brief.values():
+            self.assertIn(required, prompt)
+        self.assertIn("Do not add random text", prompt)
+        self.assertNotIn("CTA strip", prompt)
+        self.assertNotIn("oversized headline", prompt)
+
+    def test_two_creative_briefs_produce_different_prompts(self):
+        from ai_services.services.poster_generator import PosterGenerator
+
+        generator = PosterGenerator()
+        content = self._sample_content()
+        prompt_a = generator._build_primary_prompt(
+            content,
+            {
+                "focus": (
+                    "Minimal luxury perfume advertisement, centered bottle, "
+                    "cinematic studio photography."
+                ),
+                "style": "Minimal luxury",
+                "colors": "black and gold",
+                "background": "black background, gold lighting",
+                "composition": "centered bottle",
+                "mood": "cinematic",
+                "additional": "",
+            },
+            {},
+            variation_index=1,
+        )
+        prompt_b = generator._build_primary_prompt(
+            content,
+            {
+                "focus": (
+                    "Bright playful summer drink advertisement, fruit splashes, "
+                    "energetic composition."
+                ),
+                "style": "Playful commercial",
+                "colors": "turquoise and orange",
+                "background": "beach background",
+                "composition": "energetic composition",
+                "mood": "playful",
+                "additional": "fruit splashes",
+            },
+            {},
+            variation_index=1,
+        )
+        self.assertNotEqual(prompt_a, prompt_b)
+        self.assertIn("black and gold", prompt_a)
+        self.assertIn("gold lighting", prompt_a)
+        self.assertIn("turquoise and orange", prompt_b)
+        self.assertIn("beach background", prompt_b)
+
+    def test_invalid_bytes_raise_instead_of_fallback_poster(self):
+        from ai_services.services.poster_generator import PosterGenerator
+
+        generator = PosterGenerator()
+        campaign = SimpleNamespace(
+            id=1,
+            campaign_name="Launch",
+            objective="Sales",
+            platform="Instagram",
+            company=SimpleNamespace(company_name="Cafe", industry="Restaurant"),
+            product=None,
+        )
+        content = SimpleNamespace(
+            id=9,
+            title="Launch",
+            content_text="Title: Launch\nCaption: New\nCall to Action: Visit",
+            campaign=campaign,
+            poster=MagicMock(),
+        )
+        generator._generate_image = MagicMock(return_value=b"not-an-image")
+        with self.assertRaises(RuntimeError) as raised:
+            generator.generate_for_content(content, variation_index=2)
+        self.assertIn("No fallback poster", str(raised.exception))
+        content.poster.save.assert_not_called()
+
+
+class PosterGeneratorModerationRetryTests(SimpleTestCase):
+    FLAGGED_3030 = RuntimeError(
+        "Cloudflare FLUX image generation failed. HTTP 400: "
+        '{"errors": [{"code": 3030, "message": '
+        '"Your output has been flagged. Please choose another prompt '
+        '/ input image combination"}]}'
+    )
+    OTHER_400 = RuntimeError(
+        "Cloudflare FLUX image generation failed. HTTP 400: "
+        '{"errors": [{"code": 1001, "message": "invalid width"}]}'
+    )
+    QUOTA_429 = RuntimeError(
+        "Cloudflare FLUX image generation failed. HTTP 429: "
+        '{"errors": [{"code": 429, "message": "rate limited"}]}'
+    )
+
+    def _tiny_png(self):
+        buffer = BytesIO()
+        Image.new("RGB", (2, 2), (12, 34, 56)).save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    def _content(self):
+        campaign = SimpleNamespace(
+            id=1,
+            campaign_name="Seasonal Launch",
+            objective="Sales",
+            platform="Instagram",
+            company=SimpleNamespace(
+                company_name="Brand Co",
+                industry="Retail",
+            ),
+            product=SimpleNamespace(
+                product_name="Hero Perfume",
+                description="Luxury bottle",
+            ),
+        )
+        return SimpleNamespace(
+            id=9,
+            title="Launch",
+            content_text=(
+                "Title: Big Sale Headline\n"
+                "Caption: Buy now\n"
+                "Call to Action: Shop today"
+            ),
+            campaign=campaign,
+            poster=MagicMock(),
+        )
+
+    def _generator_with_client(self, side_effect):
+        from ai_services.services.poster_generator import PosterGenerator
+
+        generator = PosterGenerator()
+        client = MagicMock()
+        client.generate_image.side_effect = side_effect
+        generator._get_image_client = MagicMock(return_value=client)
+        return generator, client
+
+    def test_successful_first_call_does_not_retry(self):
+        png = self._tiny_png()
+        generator, client = self._generator_with_client([png])
+        generator.generate_for_content(self._content(), variation_index=1)
+        self.assertEqual(client.generate_image.call_count, 1)
+
+    def test_3030_with_reference_retries_without_reference(self):
+        png = self._tiny_png()
+        generator, client = self._generator_with_client(
+            [self.FLAGGED_3030, png]
+        )
+        generator._reference_image_for_attempt = MagicMock(
+            return_value={
+                "bytes": b"fake-product-bytes",
+                "filename": "input_image_0.png",
+                "content_type": "image/png",
+            }
+        )
+        generator.generate_for_content(self._content(), variation_index=1)
+        self.assertEqual(client.generate_image.call_count, 2)
+        first_kwargs = client.generate_image.call_args_list[0].kwargs
+        second_kwargs = client.generate_image.call_args_list[1].kwargs
+        self.assertEqual(first_kwargs.get("reference_image"), b"fake-product-bytes")
+        self.assertIsNone(second_kwargs.get("reference_image"))
+        self.assertNotIn("input_image_0", second_kwargs)
+
+    def test_3030_retry_success_saves_poster(self):
+        png = self._tiny_png()
+        generator, client = self._generator_with_client(
+            [self.FLAGGED_3030, png]
+        )
+        content = self._content()
+        brief = {
+            "focus": "centered perfume bottle",
+            "style": "Minimal luxury",
+            "colors": "black and gold",
+            "background": "dark studio",
+            "composition": "product centered",
+            "mood": "cinematic",
+            "additional": "floating gold particles",
+        }
+        generator.generate_for_content(
+            content,
+            creative_brief=brief,
+            variation_index=1,
+        )
+        self.assertEqual(client.generate_image.call_count, 2)
+        retry_prompt = client.generate_image.call_args_list[1].kwargs["prompt"]
+        self.assertIn("black and gold", retry_prompt)
+        self.assertIn("floating gold particles", retry_prompt)
+        self.assertNotIn("Brand Co", retry_prompt)
+        self.assertNotIn("Hero Perfume", retry_prompt)
+        self.assertNotIn("Seasonal Launch", retry_prompt)
+        self.assertNotIn("Big Sale Headline", retry_prompt)
+        self.assertNotIn("Shop today", retry_prompt)
+        content.poster.save.assert_called_once()
+
+    def test_3030_retry_failure_does_not_save_poster(self):
+        from ai_services.services.poster_generator import (
+            POSTER_MODERATION_USER_MESSAGE,
+            PosterModerationRejected,
+        )
+
+        generator, client = self._generator_with_client(
+            [self.FLAGGED_3030, self.FLAGGED_3030]
+        )
+        content = self._content()
+        with self.assertRaises(PosterModerationRejected) as raised:
+            generator.generate_for_content(content, variation_index=1)
+        self.assertEqual(str(raised.exception), POSTER_MODERATION_USER_MESSAGE)
+        self.assertNotIn("3030", str(raised.exception))
+        self.assertEqual(client.generate_image.call_count, 2)
+        content.poster.save.assert_not_called()
+
+    def test_other_http_400_does_not_retry(self):
+        generator, client = self._generator_with_client([self.OTHER_400])
+        content = self._content()
+        with self.assertRaises(RuntimeError) as raised:
+            generator.generate_for_content(content, variation_index=1)
+        self.assertEqual(client.generate_image.call_count, 1)
+        from ai_services.services.poster_generator import PosterModerationRejected
+        self.assertNotIsInstance(raised.exception, PosterModerationRejected)
+        self.assertIn("1001", str(raised.exception))
+        content.poster.save.assert_not_called()
+
+    def test_quota_429_does_not_retry(self):
+        from ai_services.services.poster_generator import PosterModerationRejected
+
+        generator, client = self._generator_with_client([self.QUOTA_429])
+        content = self._content()
+        with self.assertRaises(RuntimeError) as raised:
+            generator.generate_for_content(content, variation_index=1)
+        self.assertEqual(client.generate_image.call_count, 1)
+        self.assertNotIsInstance(raised.exception, PosterModerationRejected)
+        self.assertIn("429", str(raised.exception))
+        content.poster.save.assert_not_called()
 

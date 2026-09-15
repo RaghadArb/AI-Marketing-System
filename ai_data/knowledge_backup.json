@@ -1,0 +1,18 @@
+[
+    {
+        "id": "company_profile_6",
+        "document": "Company name: Demo - Aurora Skin Lab\nIndustry: Retail\nDescription: A clean skincare brand focused on vitamin C serums and daily SPF for Middle East climates.\nWebsite: https://auroraskin.example.com",
+        "metadata": {
+            "company_id": 6
+        }
+    },
+    {
+        "id": "4_0",
+        "document": "Aurora Skin Lab Glow Vitamin C Serum contains 10% vitamin C. Fragrance-free. For morning use under SPF. Do not claim medical results or invented clinical percentages. Suitable for daily cosmetic use.",
+        "metadata": {
+            "knowledge_document_id": 4,
+            "company_id": 6,
+            "source": "demo_6.txt"
+        }
+    }
+]

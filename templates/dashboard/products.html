@@ -80,42 +80,26 @@
 
 
     <div class="page-header">
-
-        <div class="d-flex justify-content-between align-items-center">
-
-            <div>
-
-                <h2>
-                Product catalog
-                </h2>
-
-                <p class="mb-0 opacity-75">
-                    Manage products belonging to your companies.
-                </p>
-
-            </div>
-
-
-            <div>
-
-                <a
-                    href="{% if workspace_company %}{% url 'company_workspace' workspace_company.id %}{% else %}{% url 'dashboard_home' %}{% endif %}"
-                    class="btn btn-outline-light me-2"
-                >
-                    ← {% if workspace_company %}Overview{% else %}Dashboard{% endif %}
-                </a>
-
-                <a
-                    href="{% url 'product_create' %}{% if workspace_company %}?workspace={{ workspace_company.id }}{% endif %}"
-                    class="btn btn-light"
-                >
-                    + Add Product
-                </a>
-
-            </div>
-
+        <div>
+            <h2>Product catalog</h2>
+            <p class="mb-0 opacity-75">
+                Manage products belonging to your companies.
+            </p>
         </div>
-
+        <div class="header-actions">
+            <a
+                href="{% if workspace_company %}{% url 'company_workspace' workspace_company.id %}{% else %}{% url 'dashboard_home' %}{% endif %}"
+                class="btn btn-light dashboard-link"
+            >
+                ← {% if workspace_company %}Overview{% else %}Dashboard{% endif %}
+            </a>
+            <a
+                href="{% url 'product_create' %}{% if workspace_company %}?workspace={{ workspace_company.id }}{% endif %}"
+                class="btn btn-outline-light"
+            >
+                + Add Product
+            </a>
+        </div>
     </div>
 
 

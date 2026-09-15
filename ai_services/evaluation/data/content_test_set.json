@@ -1,0 +1,25 @@
+{
+  "description": "TEMPLATE ONLY. Replace these rows with real campaign test cases. Do not treat this file as experimental results.",
+  "cases": [
+    {
+      "id": "content_template_001",
+      "campaign_id": "REPLACE_WITH_CAMPAIGN_ID",
+      "language": "Arabic",
+      "company": "",
+      "product": "",
+      "campaign_objective": "",
+      "platform": "Instagram",
+      "target_audience": "",
+      "creative_brief": {
+        "focus": "",
+        "style": "",
+        "colors": "",
+        "background": "",
+        "composition": "",
+        "mood": "",
+        "additional": ""
+      },
+      "factual_product_company_information": "Paste verified product and company facts that the generator must not contradict."
+    }
+  ]
+}

@@ -10,7 +10,7 @@ from django.shortcuts import (
     get_object_or_404,
     redirect,
 )
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.contrib import messages
 from django.urls import reverse
 
@@ -38,7 +38,11 @@ from ai_services.services.marketing_strategy_agent import (
 from ai_services.services.social_performance_importer import (
     SocialPerformanceImporter,
 )
-from ai_services.services.poster_generator import PosterGenerator
+from ai_services.services.poster_generator import (
+    POSTER_MODERATION_USER_MESSAGE,
+    PosterGenerator,
+    PosterModerationRejected,
+)
 
 from .decorators import marketing_specialist_required
 from .presentation import parse_suggestion_display
@@ -110,6 +114,32 @@ def _safe_instagram_publish_error(message):
         return INSTAGRAM_LIVE_CONNECTION_MESSAGE
 
     return text
+
+
+def _redirect_named(name, args=None, fragment=""):
+    url = reverse(name, args=args or [])
+    if fragment:
+        url = f"{url}#{fragment}"
+    return HttpResponseRedirect(url)
+
+
+def _advisor_session_key(campaign_id):
+    return str(campaign_id)
+
+
+def _store_advisor_session(request, campaign_id, result=None, error=None):
+    stored = request.session.get("campaign_advisor_by_id") or {}
+    stored[_advisor_session_key(campaign_id)] = {
+        "result": result,
+        "error": error,
+    }
+    request.session["campaign_advisor_by_id"] = stored
+    request.session.modified = True
+
+
+def _load_advisor_session(request, campaign_id):
+    stored = request.session.get("campaign_advisor_by_id") or {}
+    return stored.get(_advisor_session_key(campaign_id)) or {}
 
 
 def _suggestion_payload(item):
@@ -659,6 +689,32 @@ def campaigns_dashboard(request, company_id=None):
 
 
 @marketing_specialist_required
+def analytics_hub(request, company_id=None):
+    campaigns = Campaign.objects.filter(
+        company__owner=request.user
+    ).select_related(
+        "company",
+        "product"
+    ).order_by(
+        "-created_at"
+    )
+    context = workspace_context(
+        request,
+        company_id,
+        tab="campaigns" if company_id else None,
+    )
+    workspace_company = context["workspace_company"]
+    if workspace_company:
+        campaigns = campaigns.filter(company=workspace_company)
+    context["campaigns"] = campaigns
+    return render(
+        request,
+        "dashboard/analytics_hub.html",
+        context,
+    )
+
+
+@marketing_specialist_required
 def campaign_create(request):
 
     workspace_id = workspace_id_from_request(request)
@@ -799,13 +855,10 @@ def _latest_studio_suggestions(campaign):
 def _brief_from_post(post):
     return {
         "focus": post.get("creative_focus", "").strip(),
-        "style": post.get("creative_style", "Premium Product Ad").strip(),
+        "style": post.get("creative_style", "").strip(),
         "colors": post.get("creative_colors", "").strip(),
         "background": post.get("creative_background", "").strip(),
-        "composition": post.get(
-            "creative_composition",
-            "Product Centered",
-        ).strip(),
+        "composition": post.get("creative_composition", "").strip(),
         "mood": post.get("creative_mood", "").strip(),
         "additional": post.get("creative_additional", "").strip(),
     }
@@ -1277,6 +1330,12 @@ def _campaign_analytics_context(
     )
     combined = intelligence_service.combined_context(campaign, voice)
 
+    advisor_state = _load_advisor_session(request, campaign.id)
+    if advisor_result is None:
+        advisor_result = advisor_state.get("result")
+    if advisor_error is None:
+        advisor_error = advisor_state.get("error")
+
     return {
         "campaign": campaign,
         "analytics": result,
@@ -1340,9 +1399,10 @@ def campaign_analytics_dashboard(
                     campaign.id,
                     True,
                 )
-            return redirect(
+            return _redirect_named(
                 "campaign_analytics_dashboard",
-                campaign_id=campaign.id,
+                args=[campaign.id],
+                fragment="social-performance",
             )
 
         if action == "import_social_performance":
@@ -1392,9 +1452,10 @@ def campaign_analytics_dashboard(
                     campaign.id,
                     notice,
                 )
-                return redirect(
+                return _redirect_named(
                     "campaign_analytics_dashboard",
-                    campaign_id=campaign.id,
+                    args=[campaign.id],
+                    fragment="social-performance",
                 )
 
         if action == "generate_ai_recommendations":
@@ -1450,11 +1511,24 @@ def campaign_analytics_dashboard(
                     intelligence=intelligence,
                     customer_voice=voice_payload,
                 )
+                advisor_error = None
             except Exception:
+                advisor_result = None
                 advisor_error = (
                     "AI recommendations could not be generated. "
                     "Campaign analytics are still available."
                 )
+            _store_advisor_session(
+                request,
+                campaign.id,
+                result=advisor_result,
+                error=advisor_error,
+            )
+            return _redirect_named(
+                "campaign_analytics_dashboard",
+                args=[campaign.id],
+                fragment="ai-recommendations",
+            )
 
     return render(
         request,
@@ -1742,9 +1816,14 @@ def ai_content_dashboard(request, company_id=None):
                                     poster_generator.generate_for_content(
                                         saved_content,
                                         creative_brief=creative_brief,
+                                        variation_index=index,
                                     )
                                     saved_content.refresh_from_db()
 
+                                except PosterModerationRejected:
+                                    poster_failures.append(
+                                        POSTER_MODERATION_USER_MESSAGE
+                                    )
                                 except Exception as poster_error:
                                     poster_failures.append(
                                         f"Suggestion {index}: "
@@ -1761,12 +1840,21 @@ def ai_content_dashboard(request, company_id=None):
                             ]
 
                             if poster_failures:
-                                messages.warning(
-                                    request,
-                                    "The posters could not be prepared "
-                                    "for every suggestion. The written "
-                                    "suggestions are still saved."
+                                unique_failures = list(
+                                    dict.fromkeys(poster_failures)
                                 )
+                                if unique_failures == [
+                                    POSTER_MODERATION_USER_MESSAGE
+                                ]:
+                                    error = POSTER_MODERATION_USER_MESSAGE
+                                else:
+                                    error = (
+                                        "Poster generation failed. "
+                                        "No fallback or previous poster "
+                                        "was used. "
+                                        + " ".join(unique_failures)
+                                    )
+                                messages.error(request, error)
 
                 except Exception as e:
                     error = str(e)
@@ -1996,9 +2084,6 @@ def customer_support_dashboard(request, company_id=None):
 
     selected_company = None
     conversations = []
-    support_analytics = None
-    customer_voice = None
-    voice_error = None
     error = None
 
     selected_id = (
@@ -2028,40 +2113,6 @@ def customer_support_dashboard(request, company_id=None):
             .order_by("-started_at")
         )
 
-        try:
-
-            analytics_service = AnalyticsService()
-
-            support_analytics = (
-                analytics_service.get_support_analytics(
-                    selected_company
-                )
-            )
-
-        except Exception as e:
-
-            error = str(e)
-
-        customer_voice = CustomerVoiceAnalyzer().analyze(
-            selected_company,
-            use_ai=False,
-        )
-
-        if request.method == "POST" and request.POST.get("action") == (
-            "analyze_customer_voice"
-        ):
-            try:
-                customer_voice = CustomerVoiceAnalyzer().analyze(
-                    selected_company,
-                    use_ai=True,
-                    include_knowledge_gaps=True,
-                )
-            except Exception:
-                voice_error = (
-                    "Customer Voice analysis could not be completed. "
-                    "Deterministic analytics are still available."
-                )
-
     knowledge_count = 0
     conversation_count = 0
     rag_indexed = False
@@ -2085,15 +2136,105 @@ def customer_support_dashboard(request, company_id=None):
             "companies": companies,
             "selected_company": selected_company,
             "conversations": conversations,
-            "support_analytics": support_analytics,
-            "customer_voice": customer_voice,
-            "voice_error": voice_error,
             "error": error,
             "knowledge_count": knowledge_count,
             "conversation_count": conversation_count,
             "rag_indexed": rag_indexed,
             **workspace,
         }
+    )
+
+
+@marketing_specialist_required
+def customer_support_analytics(request, company_id=None):
+    companies = Company.objects.filter(
+        owner=request.user
+    ).order_by("company_name")
+    selected_company = None
+    selected_conversation = None
+    conversations = []
+    support_analytics = None
+    customer_voice = None
+    voice_error = None
+    error = None
+
+    selected_id = (
+        company_id
+        or request.POST.get("company")
+        or request.GET.get("company")
+    )
+    conversation_id = (
+        request.POST.get("conversation")
+        or request.GET.get("conversation")
+    )
+    workspace = workspace_context(
+        request,
+        company_id,
+        tab="support" if company_id else None,
+    )
+    if selected_id:
+        selected_company = get_object_or_404(
+            Company,
+            id=selected_id,
+            owner=request.user,
+        )
+        conversations = list(
+            SupportConversation.objects
+            .filter(company=selected_company)
+            .prefetch_related("messages")
+            .order_by("-started_at")
+        )
+        if conversation_id:
+            selected_conversation = get_object_or_404(
+                SupportConversation,
+                id=conversation_id,
+                company=selected_company,
+            )
+        try:
+            support_analytics = AnalyticsService().get_support_analytics(
+                selected_company
+            )
+        except Exception as exc:
+            error = str(exc)
+        use_ai = (
+            request.method == "POST"
+            and request.POST.get("action") == "analyze_customer_voice"
+        )
+        try:
+            customer_voice = CustomerVoiceAnalyzer().analyze(
+                selected_company,
+                conversation=selected_conversation,
+                use_ai=use_ai,
+                include_knowledge_gaps=use_ai,
+            )
+        except Exception:
+            if use_ai:
+                voice_error = (
+                    "Customer Voice analysis could not be completed. "
+                    "Deterministic analytics are still available."
+                )
+                customer_voice = CustomerVoiceAnalyzer().analyze(
+                    selected_company,
+                    conversation=selected_conversation,
+                    use_ai=False,
+                )
+            else:
+                raise
+
+    return render(
+        request,
+        "dashboard/customer_support_analytics.html",
+        {
+            "companies": companies,
+            "selected_company": selected_company,
+            "selected_conversation": selected_conversation,
+            "conversations": conversations,
+            "support_analytics": support_analytics,
+            "customer_voice": customer_voice,
+            "voice_error": voice_error,
+            "error": error,
+            **workspace,
+        },
     )
     
     

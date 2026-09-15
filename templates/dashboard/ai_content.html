@@ -17,7 +17,7 @@
     >
     {% load static %}
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
-    <link href="{% static 'dashboard/executive.css' %}?v=studio-loop-btns" rel="stylesheet">
+    <link href="{% static 'dashboard/executive.css' %}?v=poster-align" rel="stylesheet">
 
     <style>
         html body.ex-app {
@@ -108,8 +108,10 @@
         .poster-frame img {
             display: block;
             width: 100%;
-            height: 280px;
-            object-fit: cover;
+            height: auto;
+            aspect-ratio: 1 / 1;
+            object-fit: contain;
+            background: #e8ebf0;
         }
 
         .poster-missing {
@@ -593,28 +595,20 @@
 
                 {% elif generated_suggestions %}
 
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-
-                        <div>
-
-                            <h4 class="mb-1">
-                                Content Studio
-                            </h4>
-
-                            <p class="text-muted mb-0">
-                                Each suggestion includes its own matching AI poster. Choose one, or edit it before selecting.
-                            </p>
-
-                        </div>
-
+                    <div class="studio-results-intro mb-4">
+                        <h4 class="mb-2">Generated suggestions</h4>
+                        <p class="text-muted mb-2">
+                            Each suggestion includes its own matching AI poster. Choose one, or edit it before selecting.
+                        </p>
                         {% if selected_campaign %}
-
-                            <span class="badge bg-dark p-2">
-                                {{ selected_campaign.campaign_name }}
-                            </span>
-
+                            <div class="campaign-info mb-0">
+                                <div class="studio-label mb-1">Campaign</div>
+                                <div class="fw-semibold">{{ selected_campaign.campaign_name }}</div>
+                                {% if selected_campaign.objective %}
+                                    <p class="text-muted mb-0 mt-1">{{ selected_campaign.objective }}</p>
+                                {% endif %}
+                            </div>
                         {% endif %}
-
                     </div>
 
                     {% for suggestion in generated_suggestions %}
