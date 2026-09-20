@@ -87,6 +87,28 @@ html body.ex-app {
     overflow-y: auto;
 }
 
+.ex-sidebar .ex-nav {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(208, 213, 221, 0.32) transparent;
+}
+
+.ex-sidebar .ex-nav::-webkit-scrollbar {
+    width: 6px;
+}
+
+.ex-sidebar .ex-nav::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ex-sidebar .ex-nav::-webkit-scrollbar-thumb {
+    background-color: rgba(208, 213, 221, 0.32);
+    border-radius: 999px;
+}
+
+.ex-sidebar .ex-nav::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(208, 213, 221, 0.5);
+}
+
 .ex-nav-label {
     font-size: 10px;
     letter-spacing: 0.12em;

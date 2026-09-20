@@ -52,45 +52,80 @@ def retrieval_hit(
     expected_knowledge_text="",
     ground_truth="",
 ):
-    """
-    Deterministic retrieval hit.
-
-    True if retrieved context/sources contain the expected source label,
-    expected knowledge excerpt, or a substantial overlap with the
-    ground-truth answer. Returns None when there is no expected
-    retrieval target to judge against.
-    """
+    """Return whether retrieval contains the expected content evidence."""
     expected_source = str(expected_source or "").strip()
     expected_knowledge = str(expected_knowledge_text or "").strip()
     ground_truth = str(ground_truth or "").strip()
-    if not expected_source and not expected_knowledge and not ground_truth:
+
+    evidence_excerpts = [
+        excerpt.strip()
+        for excerpt in expected_knowledge.split("|")
+        if excerpt.strip()
+    ]
+    ground_truth_tokens = _meaningful_tokens(ground_truth)
+    has_content_target = bool(evidence_excerpts or ground_truth_tokens)
+    if not expected_source and not has_content_target:
         return None
 
-    blob = " ".join(
-        [
-            str(retrieved_text or ""),
-            " ".join(str(item) for item in (retrieved_sources or [])),
-        ]
+    retrieved_text = str(retrieved_text or "")
+    source_blob = " ".join(
+        str(item) for item in (retrieved_sources or [])
     ).lower()
+    source_matches = bool(
+        expected_source
+        and expected_source.lower() in source_blob
+    )
 
-    if not blob.strip():
+    if not retrieved_text.strip() and has_content_target:
         return False
 
-    if expected_source and expected_source.lower() in blob:
+    if evidence_excerpts:
+        content_matches = all(
+            _content_matches(excerpt, retrieved_text)
+            for excerpt in evidence_excerpts
+        )
+        return content_matches and (
+            not expected_source or source_matches
+        )
+
+    if ground_truth_tokens:
+        content_matches = _token_overlap(
+            ground_truth_tokens,
+            retrieved_text,
+        ) >= 0.5
+        return content_matches and (
+            not expected_source or source_matches
+        )
+
+    # A source label is a valid fallback only when no usable content
+    # target was supplied.
+    return source_matches
+
+
+def _content_matches(target, retrieved_text):
+    target_normalized = " ".join(_tokenize(target))
+    retrieved_normalized = " ".join(_tokenize(retrieved_text))
+    if not target_normalized:
+        return False
+    if target_normalized in retrieved_normalized:
         return True
-    if expected_knowledge and expected_knowledge.lower() in blob:
-        return True
-    if ground_truth:
-        tokens = [
-            token
-            for token in _tokenize(ground_truth)
-            if len(token) >= 4
-        ]
-        if tokens:
-            matches = sum(1 for token in tokens if token in blob)
-            return matches / len(tokens) >= 0.5
-        return ground_truth.lower() in blob
-    return False
+
+    target_tokens = _meaningful_tokens(target)
+    if not target_tokens:
+        return False
+    return _token_overlap(target_tokens, retrieved_text) >= 0.5
+
+
+def _meaningful_tokens(text):
+    return [token for token in _tokenize(text) if len(token) >= 4]
+
+
+def _token_overlap(target_tokens, retrieved_text):
+    retrieved_tokens = set(_tokenize(retrieved_text))
+    if not target_tokens:
+        return 0.0
+    matches = sum(1 for token in target_tokens if token in retrieved_tokens)
+    return matches / len(target_tokens)
 
 
 def _tokenize(text):

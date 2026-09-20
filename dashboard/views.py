@@ -1,5 +1,6 @@
 import os
 import re
+import logging
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
@@ -42,6 +43,7 @@ from ai_services.services.poster_generator import (
     POSTER_MODERATION_USER_MESSAGE,
     PosterGenerator,
     PosterModerationRejected,
+    PosterProviderFallbackError,
 )
 
 from .decorators import marketing_specialist_required
@@ -79,6 +81,42 @@ from customer_support.models import SupportConversation, SupportMessage
 
 from knowledge.models import KnowledgeDocument
 from knowledge.forms import KnowledgeDocumentForm
+
+
+logger = logging.getLogger(__name__)
+
+POSTER_LIMIT_USER_MESSAGE = (
+    "Image generation limit reached. We couldn’t generate the posters "
+    "right now. Please try again later."
+)
+
+
+def _is_image_limit_error(error):
+    message = str(error).lower()
+    return bool(
+        re.search(r"\b(?:402|429)\b", message)
+        or any(
+            marker in message
+            for marker in (
+                "credit",
+                "quota",
+                "rate limit",
+                "rate-limit",
+                "too many requests",
+                "payment required",
+            )
+        )
+    )
+
+
+def _poster_failure_user_message(error):
+    if (
+        isinstance(error, PosterProviderFallbackError)
+        and _is_image_limit_error(error.primary_error)
+        and _is_image_limit_error(error.fallback_error)
+    ):
+        return POSTER_LIMIT_USER_MESSAGE
+    return "We couldn’t generate the posters right now. Please try again later."
 
 
 INSTAGRAM_LIVE_CONNECTION_MESSAGE = (
@@ -213,6 +251,10 @@ def _ingest_knowledge_document(document):
         )
         return chunk_count, None
     except Exception as exc:
+        logger.exception(
+            "Knowledge document %s could not be indexed",
+            getattr(document, "id", None),
+        )
         return None, str(exc)
 
 # ==========================================================
@@ -1825,9 +1867,16 @@ def ai_content_dashboard(request, company_id=None):
                                         POSTER_MODERATION_USER_MESSAGE
                                     )
                                 except Exception as poster_error:
+                                    logger.exception(
+                                        "Poster generation failed for suggestion %s "
+                                        "in campaign %s",
+                                        index,
+                                        selected_campaign.id,
+                                    )
                                     poster_failures.append(
-                                        f"Suggestion {index}: "
-                                        f"{poster_error}"
+                                        _poster_failure_user_message(
+                                            poster_error
+                                        )
                                     )
 
                                 created_contents.append(
@@ -1848,12 +1897,7 @@ def ai_content_dashboard(request, company_id=None):
                                 ]:
                                     error = POSTER_MODERATION_USER_MESSAGE
                                 else:
-                                    error = (
-                                        "Poster generation failed. "
-                                        "No fallback or previous poster "
-                                        "was used. "
-                                        + " ".join(unique_failures)
-                                    )
+                                    error = " ".join(unique_failures)
                                 messages.error(request, error)
 
                 except Exception as e:

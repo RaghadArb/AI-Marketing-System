@@ -1,7 +1,12 @@
+import logging
+
 from .document_loader import DocumentLoader
 from .chunker import TextChunker
 from .embeddings import EmbeddingService
 from .vector_store import VectorStore
+
+
+logger = logging.getLogger(__name__)
 
 #connects all the process of loading document -> extracting text -> splitting into chunks -> creating embeddings -> storing in chromaDB
 
@@ -58,8 +63,15 @@ class DocumentIngestionService:
                 },
             )
 
-        # Export once after all chunks
-        self.vector_store.export_backup_files()
+        # Backups are secondary artifacts. A backup failure must not report
+        # successful Chroma indexing as a failed document ingestion.
+        try:
+            self.vector_store.export_backup_files()
+        except Exception:
+            logger.exception(
+                "Chroma backup export failed after indexing knowledge document %s",
+                document.id,
+            )
 
         return len(chunks)
 
@@ -113,6 +125,9 @@ class DocumentIngestionService:
         try:
             self.vector_store.export_backup_files()
         except Exception:
-            pass
+            logger.exception(
+                "Chroma backup export failed after indexing company %s",
+                company.id,
+            )
 
         return indexed

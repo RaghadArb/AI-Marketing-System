@@ -3,6 +3,9 @@ from ai_services.evaluation.grader import (
     chatbot_grader_prompt,
     CHATBOT_GRADER_SYSTEM,
     grade_with_llm,
+    chatbot_correctness_prompt,
+    chatbot_faithfulness_prompt,
+    chatbot_relevance_prompt,
 )
 from ai_services.evaluation.metrics import (
     clamp_unit,
@@ -25,6 +28,12 @@ class TracingSupportAgent(SupportAgent):
         super().__init__()
         self.last_documents = None
         self.last_context = ""
+        self.last_company_profile = ""
+
+    def _company_profile(self, company):
+        profile = super()._company_profile(company)
+        self.last_company_profile = profile
+        return profile
 
     def _retrieve_context(self, question, company):
         documents = self.retriever.retrieve(
@@ -79,6 +88,8 @@ def evaluate_chatbot_case(case, agent, grader_llm=None):
         "expected_knowledge_text": case.get("expected_knowledge_text") or "",
         "generated_answer": None,
         "retrieved_context": None,
+        "company_profile_context": None,
+        "available_generation_evidence": None,
         "retrieved_chunks": [],
         "retrieved_sources": [],
         "correctness_score": None,
@@ -108,6 +119,8 @@ def evaluate_chatbot_case(case, agent, grader_llm=None):
     try:
         agent.last_documents = None
         agent.last_context = ""
+        if hasattr(agent, "last_company_profile"):
+            agent.last_company_profile = ""
         answer = agent.generate_answer(
             question=question,
             company_id=int(company_id),
@@ -120,6 +133,11 @@ def evaluate_chatbot_case(case, agent, grader_llm=None):
     context = agent.last_context or "\n".join(chunks)
     record["generated_answer"] = answer
     record["retrieved_context"] = context
+    profile = getattr(agent, "last_company_profile", "")
+    record["company_profile_context"] = profile if isinstance(profile, str) else ""
+    record["available_generation_evidence"] = "\n\n".join(
+        item for item in (record["company_profile_context"], context) if item
+    )
     record["retrieved_chunks"] = chunks
     record["retrieved_sources"] = sources
     record["retrieval_hit"] = retrieval_hit(
@@ -136,16 +154,15 @@ def evaluate_chatbot_case(case, agent, grader_llm=None):
         return record
 
     try:
-        graded = grade_with_llm(
-            grader_llm,
-            chatbot_grader_prompt(
-                question=question,
-                ground_truth=ground_truth,
-                generated_answer=answer,
-                retrieved_context=context,
-            ),
-            CHATBOT_GRADER_SYSTEM,
-        )
+        correctness = grade_with_llm(grader_llm, chatbot_correctness_prompt(question, ground_truth, answer), CHATBOT_GRADER_SYSTEM, "correctness")
+        faithfulness = grade_with_llm(grader_llm, chatbot_faithfulness_prompt(answer, record["available_generation_evidence"]), CHATBOT_GRADER_SYSTEM, "faithfulness")
+        relevance = grade_with_llm(grader_llm, chatbot_relevance_prompt(question, answer), CHATBOT_GRADER_SYSTEM, "relevance")
+        graded = {
+            "correctness": correctness.get("correctness"),
+            "faithfulness": faithfulness.get("faithfulness"),
+            "relevance": relevance.get("relevance"),
+            "unsupported_important_claims": faithfulness.get("unsupported_important_claims"),
+        }
     except GradingUnavailable as exc:
         record["grading_error"] = str(exc)
         return record

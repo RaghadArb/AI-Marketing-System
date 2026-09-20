@@ -10,6 +10,13 @@ def extract_json_object(text):
     raw = str(text or "").strip()
     if not raw:
         raise GradingUnavailable("Empty grader response.")
+    # LLMs commonly wrap otherwise valid JSON in a markdown code fence.
+    # Remove only a complete outer fence; do not turn arbitrary prose into JSON.
+    fenced = re.fullmatch(
+        r"```(?:json)?\s*(.*?)\s*```", raw, flags=re.IGNORECASE | re.DOTALL
+    )
+    if fenced:
+        raw = fenced.group(1).strip()
     try:
         payload = json.loads(raw)
         if isinstance(payload, dict):
@@ -28,7 +35,7 @@ def extract_json_object(text):
     return payload
 
 
-def grade_with_llm(llm, prompt, system_prompt):
+def grade_with_llm(llm, prompt, system_prompt, grader_name="grader"):
     if llm is None:
         raise GradingUnavailable("No LLM client was provided.")
     response = llm.generate(
@@ -37,7 +44,27 @@ def grade_with_llm(llm, prompt, system_prompt):
         temperature=0.1,
         max_tokens=800,
     )
-    return extract_json_object(response)
+    try:
+        payload = extract_json_object(response)
+        return _validate_grader_payload(payload, grader_name)
+    except GradingUnavailable as exc:
+        raise GradingUnavailable(f"{grader_name}: {exc}") from exc
+
+
+def _validate_grader_payload(payload, grader_name):
+    key = {"correctness": "correctness", "faithfulness": "faithfulness", "relevance": "relevance"}.get(grader_name)
+    if not key:
+        return payload
+    block = payload.get(key)
+    if not isinstance(block, dict) or "score" not in block:
+        raise GradingUnavailable(f"{grader_name}: missing {key}.score")
+    try:
+        score = float(block["score"])
+    except (TypeError, ValueError):
+        raise GradingUnavailable(f"{grader_name}: invalid {key}.score")
+    if not 0 <= score <= 1:
+        raise GradingUnavailable(f"{grader_name}: {key}.score out of range")
+    return payload
 
 
 CHATBOT_GRADER_SYSTEM = (
@@ -78,6 +105,29 @@ Generated answer:
 Retrieved context:
 {retrieved_context or "[NO RETRIEVED CONTEXT]"}
 """.strip()
+
+
+def chatbot_correctness_prompt(question, ground_truth, generated_answer):
+    return f'''Return JSON only: {{"correctness": {{"score": 0.0, "reason": ""}}}}.
+Score semantic agreement with the ground truth from 0 to 1.
+Question: {question}
+Ground truth: {ground_truth}
+Generated answer: {generated_answer}'''.strip()
+
+
+def chatbot_faithfulness_prompt(generated_answer, available_generation_evidence):
+    return f'''Return JSON only: {{"faithfulness": {{"score": 0.0, "reason": ""}}, "unsupported_important_claims": false}}.
+Score whether every important claim in the answer is supported by the available evidence. Do not use outside knowledge.
+Generated answer: {generated_answer}
+Available generation evidence:
+{available_generation_evidence or "[NO AVAILABLE EVIDENCE]"}'''.strip()
+
+
+def chatbot_relevance_prompt(question, generated_answer):
+    return f'''Return JSON only: {{"relevance": {{"score": 0.0, "reason": ""}}}}.
+Score whether the answer directly addresses the question from 0 to 1.
+Question: {question}
+Generated answer: {generated_answer}'''.strip()
 
 
 CONTENT_GRADER_SYSTEM = (

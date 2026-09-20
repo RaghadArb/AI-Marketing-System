@@ -41,6 +41,28 @@ def _is_quota_or_rate_limit(status_code, payload):
     return _has_quota_code_4006(payload)
 
 
+def _text_from_generation_result(result):
+    """Extract text from documented Cloudflare/OpenAI-compatible result shapes."""
+    if isinstance(result, str):
+        return result.strip()
+    if not isinstance(result, dict):
+        return ""
+    for key in ("response", "text", "output", "content"):
+        value = result.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    choices = result.get("choices")
+    if isinstance(choices, list) and choices:
+        first = choices[0]
+        if isinstance(first, dict):
+            message = first.get("message")
+            if isinstance(message, dict) and isinstance(message.get("content"), str):
+                return message["content"].strip()
+            if isinstance(first.get("text"), str):
+                return first["text"].strip()
+    return ""
+
+
 class CloudflareAIClient:
     """
     Cloudflare Workers AI client for TEXT generation only.
@@ -173,25 +195,7 @@ class CloudflareAIClient:
             )
 
         result = payload.get("result", {})
-
-        if isinstance(result, str):
-            text = result.strip()
-
-        elif isinstance(result, dict):
-            text = (
-                result.get("response")
-                or result.get("text")
-                or result.get("output")
-                or ""
-            )
-
-            if not isinstance(text, str):
-                text = str(text)
-
-            text = text.strip()
-
-        else:
-            text = ""
+        text = _text_from_generation_result(result)
 
         if not text:
             raise RuntimeError(

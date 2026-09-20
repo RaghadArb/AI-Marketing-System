@@ -458,6 +458,71 @@ class StrategyPlannerViewTests(TestCase):
         self.assertContains(response, "Refreshing coffee")
         self.assertContains(response, "CTA strategy")
 
+    def test_poster_quota_errors_are_sanitized_in_ui(self):
+        from ai_services.services.poster_generator import (
+            PosterProviderFallbackError,
+        )
+
+        campaign = self.Campaign.objects.create(
+            company=self.company,
+            product=self.product,
+            campaign_name="Quota Test",
+            objective="Test poster limits",
+            platform="Instagram",
+            status="Draft",
+        )
+        content = "\n".join(
+            f"Suggestion {index}\nTitle: Option {index}\nCaption: Copy {index}"
+            for index in range(1, 4)
+        )
+        mocked_content_generator = MagicMock()
+        mocked_content_generator.generate_campaign_content.return_value = {
+            "content": content,
+            "validation": {"is_valid": True, "errors": []},
+        }
+        provider_error = PosterProviderFallbackError(
+            RuntimeError(
+                'HTTP 402: {"error":{"message":"credits exhausted"}}'
+            ),
+            RuntimeError(
+                'HTTP 429: {"errors":[{"message":"quota exceeded"}]}'
+            ),
+        )
+        mocked_poster_generator = MagicMock()
+        mocked_poster_generator.generate_for_content.side_effect = provider_error
+
+        with (
+            patch(
+                "dashboard.views.ContentGenerator",
+                return_value=mocked_content_generator,
+            ),
+            patch(
+                "dashboard.views.PosterGenerator",
+                return_value=mocked_poster_generator,
+            ),
+            patch("dashboard.views.logger") as mocked_logger,
+        ):
+            response = self.client.post(
+                "/dashboard/ai-content/",
+                {
+                    "action": "generate",
+                    "campaign_id": str(campaign.id),
+                    "creative_focus": "Show the product",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "Image generation limit reached. We couldn’t generate the "
+            "posters right now. Please try again later.",
+        )
+        self.assertNotContains(response, "HTTP 402")
+        self.assertNotContains(response, "HTTP 429")
+        self.assertNotContains(response, "credits exhausted")
+        self.assertNotContains(response, "quota exceeded")
+        self.assertEqual(mocked_logger.exception.call_count, 3)
+
     def test_studio_restores_brief_and_saved_suggestions(self):
         from campaign.models import CampaignContent
 
@@ -1795,6 +1860,188 @@ class PosterGeneratorPromptTests(SimpleTestCase):
         content.poster.save.assert_not_called()
 
 
+class PosterGeneratorProviderFallbackTests(SimpleTestCase):
+    def _tiny_png(self, color=(12, 34, 56)):
+        buffer = BytesIO()
+        Image.new("RGB", (2, 2), color).save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    def _content(self):
+        campaign = SimpleNamespace(
+            id=1,
+            campaign_name="Seasonal Launch",
+            objective="Sales",
+            platform="Instagram",
+            company=SimpleNamespace(
+                company_name="Brand Co",
+                industry="Retail",
+            ),
+            product=None,
+        )
+        return SimpleNamespace(
+            id=9,
+            title="Launch",
+            content_text="Title: Launch\nCaption: New\nCall to Action: Visit",
+            campaign=campaign,
+            poster=MagicMock(),
+        )
+
+    def _generator(self, openrouter_result, cloudflare_result=None):
+        from ai_services.services.poster_generator import PosterGenerator
+
+        generator = PosterGenerator()
+        generator.image_provider = "openrouter"
+
+        openrouter_client = MagicMock()
+        if isinstance(openrouter_result, Exception):
+            openrouter_client.generate_image.side_effect = openrouter_result
+        else:
+            openrouter_client.generate_image.return_value = openrouter_result
+
+        cloudflare_client = MagicMock()
+        if isinstance(cloudflare_result, Exception):
+            cloudflare_client.generate_image.side_effect = cloudflare_result
+        else:
+            cloudflare_client.generate_image.return_value = cloudflare_result
+
+        generator._get_openrouter_image_client = MagicMock(
+            return_value=openrouter_client
+        )
+        generator._get_image_client = MagicMock(
+            return_value=cloudflare_client
+        )
+        return generator, openrouter_client, cloudflare_client
+
+    def test_openrouter_success_saves_image_without_calling_cloudflare(self):
+        openrouter_png = self._tiny_png()
+        generator, openrouter_client, cloudflare_client = self._generator(
+            openrouter_png
+        )
+        content = self._content()
+
+        result = generator.generate_for_content(content, variation_index=1)
+
+        self.assertIs(result, content.poster)
+        openrouter_client.generate_image.assert_called_once()
+        self.assertEqual(
+            openrouter_client.generate_image.call_args.kwargs["size"],
+            "1024x1024",
+        )
+        cloudflare_client.generate_image.assert_not_called()
+        content.poster.save.assert_called_once()
+
+    @patch("ai_services.services.poster_generator.logger")
+    def test_openrouter_failure_calls_cloudflare_flux_fallback(self, logger):
+        from ai_services.clients.openrouter_image_client import (
+            OpenRouterImageGenerationError,
+        )
+
+        fallback_png = self._tiny_png(color=(90, 80, 70))
+        primary_error = OpenRouterImageGenerationError(
+            "primary unavailable"
+        )
+        generator, openrouter_client, cloudflare_client = self._generator(
+            primary_error,
+            fallback_png,
+        )
+        content = self._content()
+
+        generator.generate_for_content(content, variation_index=1)
+
+        openrouter_client.generate_image.assert_called_once()
+        cloudflare_client.generate_image.assert_called_once()
+        self.assertEqual(
+            cloudflare_client.generate_image.call_args.kwargs["width"],
+            1024,
+        )
+        self.assertEqual(
+            cloudflare_client.generate_image.call_args.kwargs["height"],
+            1024,
+        )
+        from ai_services.clients.cloudflare_image_client import (
+            CloudflareImageClient,
+        )
+        self.assertEqual(
+            CloudflareImageClient.DEFAULT_MODEL,
+            "@cf/black-forest-labs/flux-2-klein-9b",
+        )
+        logger.warning.assert_called_once_with(
+            "OpenRouter poster generation failed; using Cloudflare fallback. "
+            "Error: %s",
+            primary_error,
+            exc_info=True,
+        )
+        content.poster.save.assert_called_once()
+
+    def test_both_providers_fail_surfaces_clear_error_without_pil_fallback(self):
+        from ai_services.clients.openrouter_image_client import (
+            OpenRouterImageGenerationError,
+        )
+
+        generator, openrouter_client, cloudflare_client = self._generator(
+            OpenRouterImageGenerationError("primary unavailable"),
+            RuntimeError("fallback unavailable"),
+        )
+        content = self._content()
+
+        with self.assertRaises(RuntimeError) as raised:
+            generator.generate_for_content(content, variation_index=1)
+
+        self.assertIn(
+            "OpenRouter image generation failed",
+            str(raised.exception),
+        )
+        self.assertIn("Cloudflare fallback failed", str(raised.exception))
+        openrouter_client.generate_image.assert_called_once()
+        cloudflare_client.generate_image.assert_called_once()
+        content.poster.save.assert_not_called()
+        self.assertFalse(hasattr(generator, "_generate_fallback_poster"))
+
+    @patch("ai_services.services.poster_generator.logger")
+    def test_openrouter_api_key_never_appears_in_logged_failure(self, logger):
+        import os
+
+        from ai_services.clients.openrouter_image_client import (
+            OpenRouterImageClient,
+        )
+        from ai_services.services.poster_generator import PosterGenerator
+
+        secret = "sk-or-v1-must-not-be-logged"
+        http_client = MagicMock()
+        http_client.post.side_effect = RuntimeError(
+            f"Authorization: Bearer {secret}"
+        )
+        with patch.dict(
+            os.environ,
+            {
+                "OPENROUTER_API_KEY": secret,
+                "OPENROUTER_IMAGE_MODEL": "openai/example-image-model",
+            },
+        ):
+            openrouter_client = OpenRouterImageClient(client=http_client)
+
+        cloudflare_client = MagicMock()
+        cloudflare_client.generate_image.return_value = self._tiny_png()
+        generator = PosterGenerator()
+        generator.image_provider = "openrouter"
+        generator._get_openrouter_image_client = MagicMock(
+            return_value=openrouter_client
+        )
+        generator._get_image_client = MagicMock(
+            return_value=cloudflare_client
+        )
+
+        generator.generate_for_content(self._content(), variation_index=1)
+
+        warning = logger.warning.call_args
+        rendered = warning.args[0] % warning.args[1:]
+        self.assertNotIn(secret, rendered)
+        self.assertNotIn("Bearer sk-", rendered)
+        self.assertIn("[REDACTED]", rendered)
+        self.assertTrue(warning.kwargs["exc_info"])
+        cloudflare_client.generate_image.assert_called_once()
+
+
 class PosterGeneratorModerationRetryTests(SimpleTestCase):
     FLAGGED_3030 = RuntimeError(
         "Cloudflare FLUX image generation failed. HTTP 400: "
@@ -1847,6 +2094,7 @@ class PosterGeneratorModerationRetryTests(SimpleTestCase):
         from ai_services.services.poster_generator import PosterGenerator
 
         generator = PosterGenerator()
+        generator.image_provider = "cloudflare"
         client = MagicMock()
         client.generate_image.side_effect = side_effect
         generator._get_image_client = MagicMock(return_value=client)

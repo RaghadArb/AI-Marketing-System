@@ -9,6 +9,10 @@ from PIL import Image
 from ai_services.clients.cloudflare_image_client import (
     CloudflareImageClient,
 )
+from ai_services.clients.openrouter_image_client import (
+    OpenRouterImageClient,
+    OpenRouterImageGenerationError,
+)
 
 logger = logging.getLogger("ai_services.poster_generator")
 
@@ -23,6 +27,18 @@ class PosterModerationRejected(RuntimeError):
     """Cloudflare error 3030 after the allowed moderation retry."""
 
 
+class PosterProviderFallbackError(RuntimeError):
+    """Both the primary image provider and Cloudflare fallback failed."""
+
+    def __init__(self, primary_error, fallback_error):
+        self.primary_error = primary_error
+        self.fallback_error = fallback_error
+        super().__init__(
+            "OpenRouter image generation failed: "
+            f"{primary_error}. Cloudflare fallback failed: {fallback_error}"
+        )
+
+
 class PosterGenerator:
     """
     Generates a professional poster from:
@@ -30,12 +46,24 @@ class PosterGenerator:
     - the chosen AI text suggestion
     - the marketing specialist's creative brief
 
-    Image generation goes only through Cloudflare FLUX.
+    Image generation uses OpenRouter first and Cloudflare FLUX as fallback.
     Failures raise; this class never returns a local/static poster.
     """
 
     def __init__(self):
         self.image_client = None
+        self.openrouter_image_client = None
+        self.image_provider = (
+            os.getenv("POSTER_IMAGE_PROVIDER", "openrouter")
+            .strip()
+            .lower()
+            or "openrouter"
+        )
+
+    def _get_openrouter_image_client(self):
+        if self.openrouter_image_client is None:
+            self.openrouter_image_client = OpenRouterImageClient()
+        return self.openrouter_image_client
 
     def _get_image_client(self):
         if not (
@@ -252,7 +280,7 @@ class PosterGenerator:
             "content_type": "image/png",
         }
 
-    def _generate_image(
+    def _generate_cloudflare_image(
         self,
         prompt,
         reference_image=None,
@@ -296,6 +324,53 @@ class PosterGenerator:
                 )
 
             raise
+
+    def _generate_image(
+        self,
+        prompt,
+        reference_image=None,
+        seed=None,
+    ):
+        if self.image_provider not in ("openrouter", "cloudflare"):
+            raise RuntimeError(
+                "POSTER_IMAGE_PROVIDER must be 'openrouter' or 'cloudflare'."
+            )
+
+        if self.image_provider == "cloudflare":
+            return self._generate_cloudflare_image(
+                prompt,
+                reference_image=reference_image,
+                seed=seed,
+            )
+
+        try:
+            image_bytes = self._get_openrouter_image_client().generate_image(
+                prompt=prompt,
+                size="1024x1024",
+            )
+            if not self._valid_image_bytes(image_bytes):
+                raise OpenRouterImageGenerationError(
+                    "OpenRouter returned invalid image bytes."
+                )
+            return image_bytes
+        except OpenRouterImageGenerationError as primary_error:
+            logger.warning(
+                "OpenRouter poster generation failed; using Cloudflare fallback. "
+                "Error: %s",
+                primary_error,
+                exc_info=True,
+            )
+            try:
+                return self._generate_cloudflare_image(
+                    prompt,
+                    reference_image=reference_image,
+                    seed=seed,
+                )
+            except Exception as fallback_error:
+                raise PosterProviderFallbackError(
+                    primary_error,
+                    fallback_error,
+                ) from fallback_error
 
     def _build_primary_prompt(
         self,
@@ -463,14 +538,21 @@ VISUAL BRIEF
                 reference_image=reference_image,
             )
         except Exception as exc:
-            error_code = self._cloudflare_error_code(exc)
+            cloudflare_exc = (
+                exc.fallback_error
+                if isinstance(exc, PosterProviderFallbackError)
+                else exc
+            )
+            error_code = self._cloudflare_error_code(cloudflare_exc)
             logger.info(
                 "Cloudflare image error content_id=%s code=%s http=%s",
                 getattr(campaign_content, "id", None),
                 error_code,
-                self._cloudflare_http_status(exc),
+                self._cloudflare_http_status(cloudflare_exc),
             )
-            if not self._is_cloudflare_flagged_error(exc):
+            if not self._is_cloudflare_flagged_error(cloudflare_exc):
+                if isinstance(exc, PosterProviderFallbackError):
+                    raise RuntimeError(str(exc)) from exc
                 raise RuntimeError(
                     f"Cloudflare image generation failed: {exc}"
                 ) from exc
@@ -488,7 +570,7 @@ VISUAL BRIEF
                 retry_prompt,
             )
             try:
-                image_bytes = self._generate_image(
+                image_bytes = self._generate_cloudflare_image(
                     retry_prompt,
                     reference_image=None,
                 )

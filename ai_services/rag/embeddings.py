@@ -4,12 +4,13 @@ from sentence_transformers import SentenceTransformer
 class EmbeddingService:
 
     _model = None
+    MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
     def __init__(self):
 
         if EmbeddingService._model is None:
             EmbeddingService._model = SentenceTransformer(
-                "all-MiniLM-L6-v2"
+                EmbeddingService.MODEL_NAME
             )
 
         self.model = EmbeddingService._model

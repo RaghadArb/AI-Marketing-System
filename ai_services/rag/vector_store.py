@@ -1,6 +1,39 @@
 import chromadb
 import json
 import os
+from pathlib import Path
+
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+CHROMA_PATH = BASE_DIR / "chroma_db"
+AI_DATA_PATH = BASE_DIR / "ai_data"
+
+
+def _json_ready(value):
+    """Convert Chroma/NumPy return values to plain JSON-compatible data."""
+    if hasattr(value, "tolist"):
+        return value.tolist()
+    if isinstance(value, dict):
+        return {key: _json_ready(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_ready(item) for item in value]
+    return value
+
+
+def _write_json_atomic(path, data):
+    temporary_path = f"{path}.tmp"
+    try:
+        with open(temporary_path, "w", encoding="utf-8") as file:
+            json.dump(
+                _json_ready(data),
+                file,
+                ensure_ascii=False,
+                indent=4,
+            )
+        os.replace(temporary_path, path)
+    finally:
+        if os.path.exists(temporary_path):
+            os.remove(temporary_path)
 
 
 class VectorStore:
@@ -8,7 +41,7 @@ class VectorStore:
     def __init__(self):
 
         self.client = chromadb.PersistentClient(
-            path="chroma_db"
+            path=str(CHROMA_PATH)
         )
 
         self.collection = self.client.get_or_create_collection(
@@ -177,7 +210,7 @@ class VectorStore:
     # Export backup JSON files
     def export_backup_files(self):
 
-        os.makedirs("ai_data", exist_ok=True)
+        os.makedirs(AI_DATA_PATH, exist_ok=True)
 
         # -----------------------------
         # Knowledge Backup
@@ -206,18 +239,10 @@ class VectorStore:
                 }
             )
 
-        with open(
-            "ai_data/knowledge_backup.json",
-            "w",
-            encoding="utf-8"
-        ) as f:
-
-            json.dump(
-                knowledge_data,
-                f,
-                ensure_ascii=False,
-                indent=4
-            )
+        _write_json_atomic(
+            AI_DATA_PATH / "knowledge_backup.json",
+            knowledge_data,
+        )
 
         # -----------------------------
         # Embeddings Backup
@@ -232,7 +257,9 @@ class VectorStore:
 
         embedding_data = []
 
-        vectors = embeddings.get("embeddings", [])
+        vectors = embeddings.get("embeddings")
+        if vectors is None:
+            vectors = []
         documents = embeddings.get("documents", [])
         ids = embeddings.get("ids", [])
 
@@ -242,19 +269,11 @@ class VectorStore:
                 {
                     "id": ids[i],
                     "document": documents[i],
-                    "embedding": vectors[i]
+                    "embedding": _json_ready(vectors[i])
                 }
             )
 
-        with open(
-            "ai_data/embeddings.json",
-            "w",
-            encoding="utf-8"
-        ) as f:
-
-            json.dump(
-                embedding_data,
-                f,
-                ensure_ascii=False,
-                indent=4
-            )
+        _write_json_atomic(
+            AI_DATA_PATH / "embeddings.json",
+            embedding_data,
+        )

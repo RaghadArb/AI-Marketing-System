@@ -16,7 +16,9 @@ from ai_services.evaluation.content import (
 from ai_services.evaluation.grader import (
     GradingUnavailable,
     extract_json_object,
+    grade_with_llm,
 )
+from ai_services.clients.cloudflare_ai_client import _text_from_generation_result
 from ai_services.evaluation.io import load_json, write_csv, write_json
 from ai_services.evaluation.metrics import (
     CORRECTNESS_THRESHOLD,
@@ -26,6 +28,7 @@ from ai_services.evaluation.metrics import (
     is_correct,
     retrieval_hit,
 )
+from ai_services.management.commands.evaluate_chatbot import _merge_by_id, _select_cases, _successful
 
 
 class EvaluationMetricTests(SimpleTestCase):
@@ -74,6 +77,77 @@ class EvaluationMetricTests(SimpleTestCase):
         )
         self.assertIsNone(retrieval_hit("", [], "", "", ""))
 
+    def test_wrong_chunk_from_correct_source_is_not_a_hit(self):
+        self.assertFalse(
+            retrieval_hit(
+                "اللغة الأساسية لخدمة العملاء هي العربية.",
+                ["company_information.txt"],
+                expected_source="company_information.txt",
+                expected_knowledge_text=(
+                    "المتجر إلكتروني سعودي لمنتجات العناية بالبشرة."
+                ),
+            )
+        )
+
+    def test_correct_evidence_from_expected_source_is_a_hit(self):
+        evidence = "المتجر إلكتروني سعودي لمنتجات العناية بالبشرة."
+        self.assertTrue(
+            retrieval_hit(
+                evidence,
+                ["company_information.txt"],
+                expected_source="company_information.txt",
+                expected_knowledge_text=evidence,
+            )
+        )
+
+    def test_evidence_match_with_source_metadata_is_a_hit(self):
+        self.assertTrue(
+            retrieval_hit(
+                "مدة الإرجاع أربعة عشر يوماً من تاريخ الاستلام.",
+                ["returns_refunds.txt", "13_0"],
+                expected_source="returns_refunds.txt",
+                expected_knowledge_text=(
+                    "مدة الإرجاع أربعة عشر يوماً من تاريخ الاستلام."
+                ),
+            )
+        )
+
+    def test_source_only_fallback_requires_no_content_target(self):
+        self.assertTrue(
+            retrieval_hit(
+                "محتوى غير مرتبط",
+                ["faq.txt"],
+                expected_source="faq.txt",
+            )
+        )
+        self.assertFalse(
+            retrieval_hit(
+                "محتوى غير مرتبط",
+                ["faq.txt"],
+                expected_source="faq.txt",
+                ground_truth="سياسة الشحن داخل المملكة فقط",
+            )
+        )
+
+    def test_multiple_evidence_excerpts_are_checked_individually(self):
+        expected = "الحد الأدنى 200 نقطة | كل 100 نقطة تساوي 5 ريالات"
+        self.assertTrue(
+            retrieval_hit(
+                "كل 100 نقطة تساوي 5 ريالات، والحد الأدنى 200 نقطة.",
+                ["promotions_loyalty.txt"],
+                expected_source="promotions_loyalty.txt",
+                expected_knowledge_text=expected,
+            )
+        )
+        self.assertFalse(
+            retrieval_hit(
+                "الحد الأدنى 200 نقطة.",
+                ["promotions_loyalty.txt"],
+                expected_source="promotions_loyalty.txt",
+                expected_knowledge_text=expected,
+            )
+        )
+
     def test_content_quality_formula(self):
         quality = content_quality_from_scores(
             {
@@ -111,6 +185,23 @@ class EvaluationMetricTests(SimpleTestCase):
 
 
 class GraderParsingTests(SimpleTestCase):
+    def test_provider_result_shapes_are_supported(self):
+        self.assertEqual(_text_from_generation_result("{}"), "{}")
+        self.assertEqual(_text_from_generation_result({"response": "x"}), "x")
+        self.assertEqual(_text_from_generation_result({"choices": [{"message": {"content": "y"}}]}), "y")
+
+    def test_grader_name_is_preserved_on_invalid_json(self):
+        llm = MagicMock()
+        llm.generate.return_value = "```json\n{bad}\n```"
+        with self.assertRaisesRegex(GradingUnavailable, "faithfulness"):
+            grade_with_llm(llm, "p", "s", "faithfulness")
+
+    def test_score_range_is_validated(self):
+        llm = MagicMock()
+        llm.generate.return_value = '{"correctness":{"score":2,"reason":"bad"}}'
+        with self.assertRaisesRegex(GradingUnavailable, "out of range"):
+            grade_with_llm(llm, "p", "s", "correctness")
+
     def test_malformed_grader_json_raises(self):
         with self.assertRaises(GradingUnavailable):
             extract_json_object("the answer is good")
@@ -119,8 +210,57 @@ class GraderParsingTests(SimpleTestCase):
         payload = extract_json_object('Note: {"score": 0.5, "ok": true}')
         self.assertEqual(payload["score"], 0.5)
 
+    def test_markdown_fenced_json_is_parsed(self):
+        payload = extract_json_object(
+            "\n```json\n{\"correctness\": {\"score\": 1}}\n```\n"
+        )
+        self.assertEqual(payload["correctness"]["score"], 1)
+
+    def test_unrecoverable_fenced_json_preserves_explicit_error(self):
+        with self.assertRaisesRegex(GradingUnavailable, "could not be parsed"):
+            extract_json_object("```json\n{not valid json}\n```")
+
 
 class ChatbotEvaluationFlowTests(SimpleTestCase):
+    def test_chatbot_batch_selection_and_resume_helpers(self):
+        cases = [{"id": f"Q{i:03d}"} for i in range(1, 6)]
+        self.assertEqual([item["id"] for item in _select_cases(cases, 2, 4)], ["Q002", "Q003", "Q004"])
+        successful = {"id": "Q001", "status": "evaluated", "error": None, "grading_error": None, "correctness_score": 1, "faithfulness_score": 1, "relevance_score": 1, "hallucinated": False}
+        failed = dict(successful, grading_error="failed")
+        self.assertTrue(_successful(successful))
+        self.assertFalse(_successful(failed))
+        merged = _merge_by_id([successful], [{"id": "Q002", "status": "failed"}, {"id": "Q001", "status": "evaluated"}])
+        self.assertEqual([row["id"] for row in merged], ["Q001", "Q002"])
+
+    def test_evidence_is_separated_and_grading_inputs_are_scoped(self):
+        agent = MagicMock()
+        def generate(**_kwargs):
+            agent.last_company_profile = "Description: متجر سعودي"
+            agent.last_context = "KB fact"
+            return "متجر سعودي"
+        agent.generate_answer.side_effect = generate
+        agent.last_documents = {"documents": [["KB fact"]], "metadatas": [[{"source": "faq.txt"}]], "ids": [["1"]]}
+        agent.last_context = "KB fact"
+        llm = MagicMock()
+        llm.generate.side_effect = [
+            '{"correctness":{"score":1,"reason":"ok"}}',
+            '{"faithfulness":{"score":1,"reason":"supported"},"unsupported_important_claims":false}',
+            '{"relevance":{"score":1,"reason":"on topic"}}',
+        ]
+        record = evaluate_chatbot_case(
+            {"id": "profile", "company_id": 1, "question": "ما طبيعة المتجر؟", "expected_answer": "متجر سعودي", "expected_source": "company.txt", "expected_knowledge_text": "وصف"},
+            agent=agent,
+            grader_llm=llm,
+        )
+        self.assertEqual(record["company_profile_context"], "Description: متجر سعودي")
+        self.assertEqual(record["retrieved_context"], "KB fact")
+        self.assertIn("Description: متجر سعودي", record["available_generation_evidence"])
+        self.assertIn("KB fact", record["available_generation_evidence"])
+        self.assertFalse(record["retrieval_hit"])
+        self.assertEqual(llm.generate.call_count, 3)
+        faithfulness_prompt = llm.generate.call_args_list[1].kwargs["prompt"]
+        self.assertNotIn("متجر سعودي", faithfulness_prompt.split("Generated answer:", 1)[0])
+
     def test_skips_template_company_id(self):
         record = evaluate_chatbot_case(
             {
@@ -306,5 +446,8 @@ class EvaluationIoTests(SimpleTestCase):
         chatbot = load_json(CHATBOT_TEMPLATE)
         content = load_json(CONTENT_TEMPLATE)
         self.assertTrue(chatbot)
-        self.assertEqual(chatbot[0]["company_id"], "REPLACE_WITH_COMPANY_ID")
+        self.assertIn(
+            chatbot[0]["company_id"],
+            (None, "REPLACE_WITH_COMPANY_ID"),
+        )
         self.assertEqual(content[0]["campaign_id"], "REPLACE_WITH_CAMPAIGN_ID")
