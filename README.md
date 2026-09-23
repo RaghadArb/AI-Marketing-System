@@ -231,6 +231,123 @@ The remaining automated test was related to an evaluation-template validation ca
 
 ---
 
+
+
+2. Create a virtual environment
+python -m venv venv
+
+Activate it on Windows:
+
+venv\Scripts\activate
+
+On Linux:
+
+source venv/bin/activate
+3. Install dependencies
+pip install -r requirements.txt
+4. Configure environment variables
+
+Create a .env file and configure the required database and AI service credentials.
+
+Example database configuration:
+
+DB_ENGINE=mysql
+MYSQL_DATABASE=marketing_platform
+MYSQL_USER=your_database_user
+MYSQL_PASSWORD=your_database_password
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+
+Do not commit the .env file or API keys to GitHub.
+
+5. Apply database migrations
+python manage.py migrate
+6. Run the development server
+python manage.py runserver
+
+Then open:
+
+http://127.0.0.1:8000/
+Production Architecture
+
+The deployed application follows the following architecture:
+
+Client / Browser
+       |
+       v
+     Nginx
+       |
+       v
+    Gunicorn
+       |
+       v
+ Django Application
+    /          \
+   v            v
+ MySQL       ChromaDB
+                |
+                v
+        Semantic Retrieval
+                |
+                v
+          AI Services
+
+MySQL stores the application's relational data, while ChromaDB stores the vector representations used by the RAG-based knowledge retrieval system.
+
+Security
+Role-based access control.
+Authentication-protected management interfaces.
+Company-based data ownership and filtering.
+Environment variables for sensitive credentials.
+API credentials are excluded from source control.
+Customer-support access is separated from internal management functionality.
+Project Structure
+AI-Marketing-System/
+│
+├── accounts/
+├── ai_services/
+│   ├── analytics/
+│   ├── clients/
+│   ├── rag/
+│   └── services/
+├── campaign/
+├── companies/
+├── customer_support/
+├── dashboard/
+├── knowledge/
+├── products/
+├── config/
+├── templates/
+├── static/
+├── media/
+├── manage.py
+└── requirements.txt
+Research Results
+
+The evaluation demonstrates that AI-based content generation, knowledge-grounded customer support, advertising image generation, and campaign analytics can be integrated into a unified digital marketing platform.
+
+The strongest results were achieved in platform-appropriate marketing content and knowledge-grounded customer-support responses. Advertising image generation also produced relevant campaign visuals, while accurate rendering of textual and branding elements within generated images remains a limitation.
+
+Future Improvements
+
+Potential future improvements include:
+
+Improving text and brand rendering in AI-generated advertising images.
+Expanding integrations with social-media platforms.
+Supporting additional AI models and providers.
+Extending marketing analytics and recommendation capabilities.
+Expanding the Knowledge Base and RAG evaluation datasets.
+Improving multilingual AI-generated content.
+Author
+
+Raghad Arab
+
+Master's Project – AI-Powered Digital Marketing Platform
+
+License
+
+This project was developed for academic and research purposes.
+
 ## Installation
 
 ### 1. Clone the repository
